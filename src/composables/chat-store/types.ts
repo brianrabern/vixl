@@ -55,6 +55,13 @@ export type SessionMutations = {
     model?: string
   }) => void
   appendLocalSubagentToolEvent: (subagentId: string, event: HarnessEvent) => void
+  queueLocalSubagentSteer: (subagentId: string, message: string) => void
+  rollbackLocalSubagentSteer: (
+    subagentId: string,
+    message: string,
+    status: SubagentTimelineItem['status'],
+  ) => void
+  clearLocalQueuedSubagentSteers: (subagentId: string) => void
   setLocalSubagentPrompt: (subagentId: string, prompt: string) => void
   completeLocalSubagent: (
     subagentId: string,

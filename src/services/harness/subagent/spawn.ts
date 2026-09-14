@@ -22,7 +22,7 @@ import type { HarnessToolContext } from '@/types/harness/tool-context'
 const spawnSubagent = (ctx: HarnessToolContext) =>
   tool({
     description:
-      'Spawn a subagent. background returns immediately; end your turn; harness resumes when done; do not poll terminal_output.',
+      'Spawn a subagent. background returns immediately; end your turn; harness resumes as each background subagent finishes; do not poll terminal_output. Review each returned result (blocking or background) critically. If you find slop, correctness issues, or incomplete work, call steer_subagent with rework instructions. Do not accept weak output or spawn a duplicate subagent.',
     inputSchema: z.object({
       agentName: z
         .string()
@@ -98,6 +98,9 @@ const spawnSubagent = (ctx: HarnessToolContext) =>
         {
           toolCallId,
           agentName,
+          prompt,
+          model,
+          capabilities: resolvedCapabilities,
         },
         {
           pendingResume: !blocking,
@@ -168,7 +171,7 @@ const spawnSubagent = (ctx: HarnessToolContext) =>
         return {
           subagentId,
           status: 'running',
-          note: 'Do not poll with terminal_output. End your turn; the harness resumes when background subagents finish. subagentId is not a shell_id.',
+          note: 'Do not poll with terminal_output. End your turn; the harness resumes as each background subagent finishes. subagentId is not a shell_id.',
         }
       }
 

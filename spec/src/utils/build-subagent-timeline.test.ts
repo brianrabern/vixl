@@ -130,4 +130,36 @@ describe('buildSubagentTimeline', () => {
       't2',
     ])
   })
+
+  it('renders delivered and pending steers as user messages after the turn', () => {
+    const items = buildSubagentTimeline(
+      subagent({
+        steers: ['check tests'],
+        pendingSteers: ['then fix lint'],
+      }),
+    )
+    expect(items.map((item) => item.type)).toEqual([
+      'user',
+      'agent-turn',
+      'user',
+      'user',
+    ])
+    const firstSteer = items[2]
+    expect(firstSteer?.type).toBe('user')
+    if (firstSteer?.type !== 'user') {
+      return
+    }
+    expect(firstSteer.message.id).toBe('sub-1-steer-0')
+    expect(firstSteer.message.parts).toEqual([
+      { type: 'text', text: 'check tests' },
+    ])
+    const pendingSteer = items[3]
+    expect(pendingSteer?.type).toBe('user')
+    if (pendingSteer?.type !== 'user') {
+      return
+    }
+    expect(pendingSteer.message.parts).toEqual([
+      { type: 'text', text: 'then fix lint' },
+    ])
+  })
 })

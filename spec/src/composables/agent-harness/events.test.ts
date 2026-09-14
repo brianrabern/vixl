@@ -487,3 +487,47 @@ describe('agent-harness events visible context gating', () => {
     expect(state.contextBudgetSync.refreshContextBudget).not.toHaveBeenCalled()
   })
 })
+
+describe('agent-harness events subagent result flush', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('asks to flush background resume on each completed subagent', () => {
+    const state = buildState()
+    const { handleEvent } = createEvents(state, buildAttention(), deps)
+
+    handleEvent({
+      type: 'subagent-result',
+      subagentId: 'sub-1',
+      summary: 'first',
+      blocking: false,
+      outcome: 'completed',
+    })
+    handleEvent({
+      type: 'subagent-result',
+      subagentId: 'sub-2',
+      summary: 'second',
+      blocking: false,
+      outcome: 'completed',
+    })
+
+    expect(deps.maybeFlushBackgroundSubagentResume).toHaveBeenCalledTimes(2)
+  })
+
+  it('still asks to flush on subagent completion while compacting', () => {
+    const state = buildState()
+    state.compacting.value = true
+    const { handleEvent } = createEvents(state, buildAttention(), deps)
+
+    handleEvent({
+      type: 'subagent-result',
+      subagentId: 'sub-1',
+      summary: 'first',
+      blocking: false,
+      outcome: 'completed',
+    })
+
+    expect(deps.maybeFlushBackgroundSubagentResume).toHaveBeenCalledTimes(1)
+  })
+})

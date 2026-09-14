@@ -1,5 +1,6 @@
 import type { ModelMessage } from 'ai'
 import type { SubagentRecord, SubagentResult, SubagentStatus } from '@/types/harness/subagent-record'
+import { clearSteers, resetInboxForTests } from '@/services/harness/subagent/inbox'
 
 type CompletionWaiter = (result: SubagentResult) => void
 
@@ -40,7 +41,13 @@ export const register = (
   chatId: string,
   subagentId: string,
   controller: AbortController,
-  meta: { toolCallId: string; agentName: string },
+  meta: {
+    toolCallId: string
+    agentName: string
+    prompt?: string
+    model?: string
+    capabilities?: 'read-only' | 'write'
+  },
   options?: { pendingResume?: boolean },
 ): SubagentRecord => {
   const record: SubagentRecord = {
@@ -50,6 +57,9 @@ export const register = (
     agentName: meta.agentName,
     status: 'running',
     startedAt: new Date().toISOString(),
+    prompt: meta.prompt,
+    model: meta.model,
+    capabilities: meta.capabilities,
   }
 
   subagents.set(subagentId, record)
@@ -175,7 +185,44 @@ export const clearTurnResponseMessages = (chatId: string): void => {
   turnResponseMessages.delete(chatId)
 }
 
+export const setMessages = (subagentId: string, messages: ModelMessage[]): void => {
+  const record = subagents.get(subagentId)
+  if (!record) {
+    return
+  }
+  record.messages = messages
+}
+
+export const appendMessages = (
+  subagentId: string,
+  extra: ModelMessage[],
+): void => {
+  const record = subagents.get(subagentId)
+  if (!record || extra.length === 0) {
+    return
+  }
+  record.messages = [...(record.messages ?? []), ...extra]
+}
+
+export const reopen = (
+  subagentId: string,
+  controller: AbortController,
+): SubagentRecord | null => {
+  const record = subagents.get(subagentId)
+  if (!record || (record.status !== 'completed' && record.status !== 'failed')) {
+    return null
+  }
+
+  deliveredBackgroundResults.get(record.chatId)?.delete(record.toolCallId)
+  pendingBackgroundResume.add(record.chatId)
+  record.status = 'running'
+  record.result = undefined
+  controllers.set(subagentId, controller)
+  return record
+}
+
 export const abortOne = (subagentId: string): void => {
+  clearSteers(subagentId)
   const record = subagents.get(subagentId)
   if (!record || record.status !== 'running') {
     return
@@ -201,6 +248,7 @@ export const abort = (chatId: string): void => {
   }
 
   for (const subagentId of ids) {
+    clearSteers(subagentId)
     const record = subagents.get(subagentId)
     if (!record || record.status !== 'running') {
       continue
@@ -233,4 +281,5 @@ export const resetSubagentRegistryForTests = (): void => {
   turnResponseMessages.clear()
   pendingBackgroundResume.clear()
   deliveredBackgroundResults.clear()
+  resetInboxForTests()
 }

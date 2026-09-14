@@ -1,3 +1,5 @@
+import type { ModelMessage } from 'ai'
+
 export type SubagentStatus = 'running' | 'completed' | 'failed' | 'aborted'
 
 export type SubagentResult = {
@@ -14,4 +16,8 @@ export type SubagentRecord = {
   status: SubagentStatus
   result?: SubagentResult
   startedAt: string
+  prompt?: string
+  model?: string
+  capabilities?: 'read-only' | 'write'
+  messages?: ModelMessage[]
 }

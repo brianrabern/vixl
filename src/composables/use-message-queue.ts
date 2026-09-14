@@ -2,8 +2,6 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import type { QueuedChatMessage } from '@/types/chat/queued-chat-message'
 
-const MAX_QUEUE_SIZE = 10
-
 export default () => {
   const items = ref<QueuedChatMessage[]>([]) as Ref<QueuedChatMessage[]>
 
@@ -12,9 +10,6 @@ export default () => {
   }
 
   const enqueue = (item: Omit<QueuedChatMessage, 'id'>): string => {
-    if (items.value.length >= MAX_QUEUE_SIZE) {
-      throw new Error(`Message queue is full (max ${MAX_QUEUE_SIZE})`)
-    }
     const id = crypto.randomUUID()
     items.value = [...items.value, { ...item, id }]
     return id
@@ -39,7 +34,6 @@ export default () => {
 
   return {
     items,
-    maxSize: MAX_QUEUE_SIZE,
     enqueue,
     remove,
     take,

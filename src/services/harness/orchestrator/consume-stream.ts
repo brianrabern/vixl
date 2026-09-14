@@ -7,8 +7,9 @@ import { rejectPendingMcpAuthForChat } from '@/services/mcp/mcp-auth-gate'
 import enrichToolError from '@/services/harness/enrich-tool-error'
 import { clearStagedImages } from '@/services/harness/image-stage'
 import { killShellsForChat } from '@/services/harness/shell/registry'
-import { abort as abortSubagentsForChat } from '@/services/harness/subagent/registry'
 import {
+  abort as abortSubagentsForChat,
+  getTurnResponseMessages,
   hasPendingBackgroundResume,
   setTurnResponseMessages,
 } from '@/services/harness/subagent/registry'
@@ -289,7 +290,11 @@ export default async (prepared: PreparedHarnessStream): Promise<void> => {
     }
   }
 
-  if (captureTurnMessages && hasPendingBackgroundResume(chatId)) {
+  if (
+    captureTurnMessages &&
+    hasPendingBackgroundResume(chatId) &&
+    !getTurnResponseMessages(chatId)
+  ) {
     const responseMessages = await result.responseMessages
     setTurnResponseMessages(chatId, responseMessages)
   }

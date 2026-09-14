@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, nextTick, ref, shallowRef } from 'vue'
 import type { AgentHarnessState, AttentionHelpers } from '@/composables/agent-harness/types'
 import { mockVixlTauri } from '../../test-utils/mocks/vixl-tauri'
 
@@ -24,6 +24,9 @@ const updateChatMeta = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined),
 )
 const toastError = vi.hoisted(() => vi.fn<(...args: unknown[]) => void>())
+const sendFn = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+)
 
 vi.mock('@/services/vixl/vixl-tauri', () =>
   mockVixlTauri({
@@ -47,6 +50,12 @@ vi.mock('@/utils/should-flush-background-subagent-resume', () => ({
 
 vi.mock('@/services/harness/orchestrator', () => ({
   resumeOrchestrator: (...args: unknown[]) => resumeOrchestrator(...args),
+}))
+
+vi.mock('@/composables/agent-harness/send', () => ({
+  default: () => ({
+    send: (...args: unknown[]) => sendFn(...args),
+  }),
 }))
 
 vi.mock('vue-sonner', () => ({
@@ -89,14 +98,44 @@ const buildState = (): AgentHarnessState =>
     },
     toolRuns: shallowRef([]),
     subagents: shallowRef([]),
+    compacting: ref(false),
+    disposed: ref(false),
+    suppressQueueDrainAfterStop: ref(false),
     config: {
       hydrated: computed(() => true),
     },
   }) as unknown as AgentHarnessState
 
-const buildAttention = (): AttentionHelpers =>
+const queuedItem = {
+  id: 'q-1',
+  text: 'queued',
+  files: [],
+  mode: 'agent' as const,
+  model: 'openai::gpt-4o',
+}
+
+const buildAttention = (
+  state: AgentHarnessState,
+  extras?: {
+    isFullyIdle?: () => boolean
+    isParentBusy?: () => boolean
+  },
+): AttentionHelpers =>
   ({
-    isFullyIdle: () => true,
+    isFullyIdle:
+      extras?.isFullyIdle ??
+      (() =>
+        state.status.value !== 'streaming' &&
+        state.status.value !== 'submitted' &&
+        !state.resumingBackgroundBatch.value &&
+        !state.compacting.value),
+    isParentBusy:
+      extras?.isParentBusy ??
+      (() =>
+        state.status.value === 'streaming' ||
+        state.status.value === 'submitted' ||
+        state.resumingBackgroundBatch.value ||
+        state.compacting.value),
     refreshSidebar: vi.fn<() => void>(),
     applyTurnEndAttention: vi.fn<() => void>(),
   }) as unknown as AttentionHelpers
@@ -110,9 +149,10 @@ describe('maybeFlushBackgroundSubagentResume', () => {
 
   it('clears pending resume state when flush is clear', () => {
     shouldFlushBackgroundSubagentResume.mockReturnValue('clear')
+    const state = buildState()
     const { maybeFlushBackgroundSubagentResume } = createTurnLoop(
-      buildState(),
-      buildAttention(),
+      state,
+      buildAttention(state),
       {
         handleEvent: vi.fn<() => void>(),
         persistPermission: vi
@@ -129,9 +169,10 @@ describe('maybeFlushBackgroundSubagentResume', () => {
   })
 
   it('does not clear pending resume when flush is a noop', () => {
+    const state = buildState()
     const { maybeFlushBackgroundSubagentResume } = createTurnLoop(
-      buildState(),
-      buildAttention(),
+      state,
+      buildAttention(state),
       {
         handleEvent: vi.fn<() => void>(),
         persistPermission: vi
@@ -145,12 +186,119 @@ describe('maybeFlushBackgroundSubagentResume', () => {
     expect(clearPendingBackgroundResume).not.toHaveBeenCalled()
     expect(updateChatMeta).not.toHaveBeenCalled()
   })
+
+  const lastRunConfig = {
+    mode: 'agent' as const,
+    model: 'openai::gpt-4o',
+    mentions: [],
+    effectiveSettings: { version: 1 as const },
+  }
+
+  const deliverableResult = {
+    toolCallId: 'tc-1',
+    result: { subagentId: 'sub-1', name: 'explorer', summary: 'done' },
+  }
+
+  const flushPolicyFromArgs = (args: unknown): 'resume' | 'clear' | 'noop' => {
+    const typed = args as {
+      parentBusy: boolean
+      hasPending: boolean
+      hasRunning: boolean
+      deliverableCount: number
+    }
+    if (!typed.hasPending) {
+      return 'noop'
+    }
+    if (typed.parentBusy) {
+      return 'noop'
+    }
+    if (typed.deliverableCount > 0) {
+      return 'resume'
+    }
+    if (typed.hasRunning) {
+      return 'noop'
+    }
+    return 'clear'
+  }
+
+  const loopDeps = () => ({
+    handleEvent: vi.fn<() => void>(),
+    persistPermission: vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValue(undefined),
+  })
+
+  it('does not resume while compacting even when a background result is deliverable', async () => {
+    shouldFlushBackgroundSubagentResume.mockImplementation(flushPolicyFromArgs)
+    listDeliverableBackgroundResults.mockReturnValue([deliverableResult])
+    const state = buildState()
+    state.compacting.value = true
+    state.lastRunConfig.value = lastRunConfig
+    const { maybeFlushBackgroundSubagentResume } = createTurnLoop(
+      state,
+      buildAttention(state),
+      loopDeps(),
+    )
+
+    maybeFlushBackgroundSubagentResume()
+    await Promise.resolve()
+
+    expect(shouldFlushBackgroundSubagentResume).toHaveBeenCalledWith(
+      expect.objectContaining({ parentBusy: true }),
+    )
+    expect(resumeOrchestrator).not.toHaveBeenCalled()
+    expect(state.status.value).toBe('ready')
+    expect(state.resumingBackgroundBatch.value).toBe(false)
+  })
+
+  it('resumes after compaction completes', async () => {
+    shouldFlushBackgroundSubagentResume.mockImplementation(flushPolicyFromArgs)
+    listDeliverableBackgroundResults.mockReturnValue([deliverableResult])
+    const state = buildState()
+    state.compacting.value = true
+    state.lastRunConfig.value = lastRunConfig
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    await nextTick()
+    expect(resumeOrchestrator).not.toHaveBeenCalled()
+
+    state.compacting.value = false
+    await nextTick()
+    await Promise.resolve()
+
+    expect(shouldFlushBackgroundSubagentResume).toHaveBeenCalledWith(
+      expect.objectContaining({ parentBusy: false }),
+    )
+    expect(resumeOrchestrator).toHaveBeenCalled()
+  })
+
+  it('resumes on each idle flush when a background result is deliverable', async () => {
+    shouldFlushBackgroundSubagentResume.mockImplementation(flushPolicyFromArgs)
+    listDeliverableBackgroundResults.mockReturnValue([deliverableResult])
+    const state = buildState()
+    state.lastRunConfig.value = lastRunConfig
+    const { maybeFlushBackgroundSubagentResume } = createTurnLoop(
+      state,
+      buildAttention(state),
+      loopDeps(),
+    )
+
+    maybeFlushBackgroundSubagentResume()
+    await Promise.resolve()
+
+    expect(shouldFlushBackgroundSubagentResume).toHaveBeenCalledWith(
+      expect.objectContaining({ parentBusy: false }),
+    )
+    expect(resumeOrchestrator).toHaveBeenCalledTimes(1)
+    expect(state.resumingBackgroundBatch.value).toBe(true)
+  })
 })
 
 describe('resumeAfterBackgroundSubagents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resumeOrchestrator.mockResolvedValue(undefined)
+    shouldFlushBackgroundSubagentResume.mockReturnValue('noop')
     listDeliverableBackgroundResults.mockReturnValue([
       {
         toolCallId: 'tc-1',
@@ -172,7 +320,7 @@ describe('resumeAfterBackgroundSubagents', () => {
     }
     const { resumeAfterBackgroundSubagents } = createTurnLoop(
       state,
-      buildAttention(),
+      buildAttention(state),
       {
         handleEvent: vi.fn<() => void>(),
         persistPermission: vi
@@ -190,6 +338,260 @@ describe('resumeAfterBackgroundSubagents', () => {
     })
     expect(state.status.value).toBe('error')
     expect(state.resumingBackgroundBatch.value).toBe(false)
+  })
+
+  it('does not drain the queue after a successful resume when stop suppression is set', async () => {
+    const state = buildState()
+    state.suppressQueueDrainAfterStop.value = true
+    state.lastRunConfig.value = {
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      mentions: [],
+      effectiveSettings: { version: 1 },
+    }
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    const { resumeAfterBackgroundSubagents } = createTurnLoop(
+      state,
+      buildAttention(state),
+      {
+        handleEvent: vi.fn<() => void>(),
+        persistPermission: vi
+          .fn<() => Promise<void>>()
+          .mockResolvedValue(undefined),
+      },
+    )
+
+    await resumeAfterBackgroundSubagents()
+
+    expect(resumeOrchestrator).toHaveBeenCalled()
+    expect(state.status.value).toBe('ready')
+    expect(state.messageQueue.take).not.toHaveBeenCalled()
+    expect(sendFn).not.toHaveBeenCalled()
+  })
+})
+
+describe('idle queue drain', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    updateChatMeta.mockResolvedValue(undefined)
+    shouldFlushBackgroundSubagentResume.mockReturnValue('noop')
+    sendFn.mockResolvedValue(undefined)
+  })
+
+  const loopDeps = () => ({
+    handleEvent: vi.fn<() => void>(),
+    persistPermission: vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValue(undefined),
+  })
+
+  it('drains the queue when the parent becomes fully idle after success', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(state.messageQueue.take).toHaveBeenCalled()
+    expect(sendFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'queued',
+        internal: true,
+        skipUserMessage: undefined,
+      }),
+    )
+  })
+
+  it('replays skipUserMessage when draining a deferred persist', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce({
+        ...queuedItem,
+        skipUserMessage: true,
+      })
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(sendFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'queued',
+        internal: true,
+        skipUserMessage: true,
+        skipUserPersist: undefined,
+      }),
+    )
+  })
+
+  it('replays skipUserPersist when draining a deferred retry', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce({
+        ...queuedItem,
+        skipUserMessage: true,
+        skipUserPersist: true,
+      })
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(sendFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'queued',
+        internal: true,
+        skipUserMessage: true,
+        skipUserPersist: true,
+      }),
+    )
+  })
+
+  it('drains the queue when the parent becomes idle after an error', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'error'
+    await nextTick()
+
+    expect(sendFn).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'queued', internal: true }),
+    )
+  })
+
+  it('does not drain when compactChat completes after stop', async () => {
+    const state = buildState()
+    state.suppressQueueDrainAfterStop.value = true
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    const { maybeDrainQueue } = createTurnLoop(
+      state,
+      buildAttention(state),
+      loopDeps(),
+    )
+
+    await maybeDrainQueue()
+
+    expect(state.messageQueue.take).not.toHaveBeenCalled()
+    expect(sendFn).not.toHaveBeenCalled()
+  })
+
+  it('does not drain after an explicit stop', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    state.suppressQueueDrainAfterStop.value = true
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(state.messageQueue.take).not.toHaveBeenCalled()
+    expect(sendFn).not.toHaveBeenCalled()
+  })
+
+  it('keeps queued messages after stop when suppression stays set', async () => {
+    const state = buildState()
+    state.status.value = 'ready'
+    state.suppressQueueDrainAfterStop.value = true
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.compacting.value = true
+    await nextTick()
+    state.compacting.value = false
+    await nextTick()
+
+    expect(state.messageQueue.take).not.toHaveBeenCalled()
+    expect(sendFn).not.toHaveBeenCalled()
+  })
+
+  it('drains the queue after a new turn clears stop suppression', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    state.suppressQueueDrainAfterStop.value = true
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+    expect(sendFn).not.toHaveBeenCalled()
+
+    state.suppressQueueDrainAfterStop.value = false
+    await nextTick()
+
+    expect(state.messageQueue.take).toHaveBeenCalled()
+    expect(sendFn).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'queued', internal: true }),
+    )
+  })
+
+  it('flushes a pending background resume before draining the queue', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    const order: string[] = []
+    shouldFlushBackgroundSubagentResume.mockImplementation(() => {
+      order.push('flush')
+      return 'noop'
+    })
+    vi.mocked(state.messageQueue.take).mockImplementation(() => {
+      order.push('take')
+      return undefined
+    })
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(order[0]).toBe('flush')
+    expect(order).toContain('take')
+    expect(order.indexOf('flush')).toBeLessThan(order.indexOf('take'))
+  })
+
+  it('does not drain while waiting on background work', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce(queuedItem)
+      .mockReturnValue(undefined)
+    createTurnLoop(
+      state,
+      buildAttention(state, {
+        isFullyIdle: () => false,
+        isParentBusy: () =>
+          state.status.value === 'streaming' ||
+          state.status.value === 'submitted',
+      }),
+      loopDeps(),
+    )
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(shouldFlushBackgroundSubagentResume).toHaveBeenCalled()
+    expect(state.messageQueue.take).not.toHaveBeenCalled()
+    expect(sendFn).not.toHaveBeenCalled()
   })
 })
 

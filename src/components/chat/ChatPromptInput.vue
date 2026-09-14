@@ -72,6 +72,7 @@ const props = withDefaults(
     showProjectSelect?: boolean
     permissionLevel?: PermissionLevel
     waitingOnBackground?: boolean
+    allowSubmitWhileBusy?: boolean
   }>(),
   {
     status: 'ready',
@@ -79,6 +80,7 @@ const props = withDefaults(
     showProjectSelect: false,
     permissionLevel: undefined,
     waitingOnBackground: false,
+    allowSubmitWhileBusy: false,
   },
 )
 
@@ -166,6 +168,14 @@ const activeProjectName = computed(() => {
 
 const isWaitingOnReply = computed(
   () => props.status === 'submitted' || props.status === 'streaming',
+)
+
+const showStop = computed(
+  () => isWaitingOnReply.value || props.waitingOnBackground,
+)
+
+const showSubmit = computed(
+  () => !showStop.value || props.allowSubmitWhileBusy,
 )
 
 const isEditing = computed(() => chatStore.editingMessageId.value !== null)
@@ -589,11 +599,11 @@ watch(
               @update:model-value="handleModelChange"
             />
             <PromptInputSubmit
-              v-if="!isWaitingOnReply && !waitingOnBackground"
+              v-if="showSubmit"
               class="shrink-0"
               :disabled="disabled"
             />
-            <Tooltip v-else>
+            <Tooltip v-if="showStop">
               <TooltipTrigger as-child>
                 <Button
                   type="button"

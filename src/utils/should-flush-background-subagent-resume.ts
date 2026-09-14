@@ -13,11 +13,14 @@ export default (
   if (!args.hasPending) {
     return 'noop'
   }
-  if (args.parentBusy || args.hasRunning) {
+  if (args.parentBusy) {
     return 'noop'
   }
   if (args.deliverableCount > 0) {
     return 'resume'
+  }
+  if (args.hasRunning) {
+    return 'noop'
   }
   return 'clear'
 }

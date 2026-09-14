@@ -1,3 +1,4 @@
+import { watch } from 'vue'
 import { toast } from 'vue-sonner'
 import type { HarnessEvent } from '@/types/harness/harness-event'
 import type { PermissionCapabilityKey } from '@/types/harness/permission'
@@ -40,30 +41,59 @@ export default (
     sessionPermissionLevel,
     fleetSidebar,
     messageQueue,
+    suppressQueueDrainAfterStop,
+    disposed,
   } = state
 
+  let drainInFlight = false
+  let drainAgain = false
+
   const maybeDrainQueue = async (): Promise<void> => {
-    while (attention.isFullyIdle()) {
-      const item = messageQueue.take()
-      if (!item) {
-        return
-      }
-      try {
-        await send({
-          text: item.text,
-          files: item.files,
-          mode: item.mode,
-          model: item.model,
-          reasoning: item.reasoning,
-          mentions: item.mentions,
-          internal: true,
-        })
-      } catch (err) {
-        toast.error('Failed to send queued message', {
-          description: err instanceof Error ? err.message : 'Unknown error',
-        })
-        return
-      }
+    if (suppressQueueDrainAfterStop.value) {
+      return
+    }
+    if (drainInFlight) {
+      drainAgain = true
+      return
+    }
+    drainInFlight = true
+    try {
+      do {
+        drainAgain = false
+        while (
+          attention.isFullyIdle() &&
+          !suppressQueueDrainAfterStop.value
+        ) {
+          const item = messageQueue.take()
+          if (!item) {
+            break
+          }
+          try {
+            await send({
+              text: item.text,
+              files: item.files,
+              mode: item.mode,
+              model: item.model,
+              reasoning: item.reasoning,
+              mentions: item.mentions,
+              skipUserMessage: item.skipUserMessage,
+              skipUserPersist: item.skipUserPersist,
+              internal: true,
+            })
+          } catch (err) {
+            toast.error('Failed to send queued message', {
+              description: err instanceof Error ? err.message : 'Unknown error',
+            })
+            return
+          }
+        }
+      } while (
+        drainAgain &&
+        attention.isFullyIdle() &&
+        !suppressQueueDrainAfterStop.value
+      )
+    } finally {
+      drainInFlight = false
     }
   }
 
@@ -163,10 +193,7 @@ export default (
 
   const maybeFlushBackgroundSubagentResume = (): void => {
     const action = shouldFlushBackgroundSubagentResume({
-      parentBusy:
-        status.value === 'streaming' ||
-        status.value === 'submitted' ||
-        resumingBackgroundBatch.value,
+      parentBusy: attention.isParentBusy(),
       hasPending: hasPendingBackgroundResume(options.chatId),
       hasRunning: hasRunningSubagentsForChat(options.chatId),
       deliverableCount: listDeliverableBackgroundResults(options.chatId).length,
@@ -198,6 +225,50 @@ export default (
       })
     })
   }
+
+  const drainQueueFromIdle = (): void => {
+    maybeDrainQueue().catch((err: unknown) => {
+      toast.error('Failed to send queued message', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      })
+    })
+  }
+
+  const handleBecameIdle = (): void => {
+    if (disposed.value || suppressQueueDrainAfterStop.value) {
+      return
+    }
+    if (abortController.value || attention.isParentBusy()) {
+      return
+    }
+    maybeFlushBackgroundSubagentResume()
+    if (attention.isFullyIdle()) {
+      drainQueueFromIdle()
+    }
+  }
+
+  watch(
+    () => {
+      const parentBusy = attention.isParentBusy()
+      const fullyIdle = attention.isFullyIdle()
+      const runningCount = state.subagents.value.filter(
+        (item) => item.status === 'running',
+      ).length
+      return [
+        parentBusy,
+        fullyIdle,
+        runningCount,
+        status.value,
+        state.compacting.value,
+        resumingBackgroundBatch.value,
+        abortController.value,
+        suppressQueueDrainAfterStop.value,
+      ].join(':')
+    },
+    () => {
+      handleBecameIdle()
+    },
+  )
 
   return {
     send,

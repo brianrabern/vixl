@@ -32,6 +32,7 @@ import createLifecycle from './lifecycle'
 import createPersistence from './persistence'
 import createRestoreUsage from './restore-usage'
 import createSessionOps from './session-ops'
+import createSteer from './steer'
 import createTurnLoop from './turn-loop'
 import type { AgentHarnessState, LastRunConfig } from './types'
 
@@ -81,6 +82,7 @@ const createAgentHarness = (options: AgentHarnessOptions) => {
     sessionAllows: new Set<string>(),
     sessionDenies: new Set<string>(),
     disposed: ref(false),
+    suppressQueueDrainAfterStop: ref(false),
   }
 
   const attention = createHelpers(state)
@@ -115,6 +117,10 @@ const createAgentHarness = (options: AgentHarnessOptions) => {
     maybeDrainQueue: turnLoop.maybeDrainQueue,
   })
   const restoreUsage = createRestoreUsage(state)
+  const steer = createSteer(state, {
+    handleEvent: events.handleEvent,
+    persistPermission: approvals.persistPermission,
+  })
 
   return {
     status: state.status,
@@ -132,6 +138,7 @@ const createAgentHarness = (options: AgentHarnessOptions) => {
     compacting: state.compacting,
     isWaitingOnBackground: attention.isWaitingOnBackground,
     send: turnLoop.send,
+    steerSubagent: steer.steerSubagent,
     submitEditMessage: persistence.submitEditMessage,
     retryLastTurn: persistence.retryLastTurn,
     restoreAgentTurnFiles: persistence.restoreAgentTurnFiles,

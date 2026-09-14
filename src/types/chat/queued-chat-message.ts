@@ -11,4 +11,6 @@ export interface QueuedChatMessage {
   model: string
   reasoning?: ReasoningLevel
   mentions?: ContextMention[]
+  skipUserMessage?: boolean
+  skipUserPersist?: boolean
 }

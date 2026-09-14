@@ -3,7 +3,10 @@ import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { HarnessEvent } from '@/types/harness/harness-event'
 import {
   appendSubagentToolEvent,
+  clearQueuedSubagentSteers,
   completeSubagentTimelineItem,
+  queueSubagentSteer,
+  rollbackQueuedSubagentSteer,
   upsertSubagentStart,
 } from '@/composables/chat-store/timeline'
 
@@ -160,5 +163,132 @@ describe('appendSubagentToolEvent compaction', () => {
     expect(item.compactions).toEqual([
       { summary: 'Kept the file reads', focus: 'auth', toolBoundary: 0 },
     ])
+  })
+})
+
+describe('appendSubagentToolEvent steer and history', () => {
+  it('marks a finished subagent running when a steer arrives', () => {
+    const done = completeSubagentTimelineItem(
+      started(),
+      'sub-1',
+      'first pass',
+      'done',
+    )
+    const next = appendSubagentToolEvent(done, 'sub-1', {
+      type: 'subagent-steer',
+      message: 'keep going',
+    })
+    const item = next[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.status).toBe('running')
+    expect(item.steers).toEqual(['keep going'])
+    expect(item.pendingSteers).toEqual([])
+    expect(item.tools).toEqual([])
+  })
+
+  it('consumes a matching pending steer without duplicating the message', () => {
+    const queued = started()
+    const withPending = queued.map((item) =>
+      item.type === 'subagent'
+        ? { ...item, pendingSteers: ['keep going'] }
+        : item,
+    )
+    const next = appendSubagentToolEvent(withPending, 'sub-1', {
+      type: 'subagent-steer',
+      message: 'keep going',
+    })
+    const item = next[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.steers).toEqual(['keep going'])
+    expect(item.pendingSteers).toEqual([])
+  })
+
+  it('stores persisted conversation messages on the timeline item', () => {
+    const next = appendSubagentToolEvent(started(), 'sub-1', {
+      type: 'subagent-history',
+      messages: [
+        { role: 'user', content: 'task' },
+        { role: 'assistant', content: 'done' },
+      ],
+    })
+    const item = next[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.messages).toEqual([
+      { role: 'user', content: 'task' },
+      { role: 'assistant', content: 'done' },
+    ])
+  })
+})
+
+describe('queueSubagentSteer and rollback', () => {
+  it('queues a pending steer and marks the item running', () => {
+    const done = completeSubagentTimelineItem(
+      started(),
+      'sub-1',
+      'first pass',
+      'done',
+    )
+    const queued = queueSubagentSteer(done, 'sub-1', 'keep going')
+    const item = queued[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.status).toBe('running')
+    expect(item.pendingSteers).toEqual(['keep going'])
+  })
+
+  it('drops the queued steer and restores the prior status', () => {
+    const done = completeSubagentTimelineItem(
+      started(),
+      'sub-1',
+      'first pass',
+      'done',
+    )
+    const queued = queueSubagentSteer(done, 'sub-1', 'keep going')
+    const rolled = rollbackQueuedSubagentSteer(
+      queued,
+      'sub-1',
+      'keep going',
+      'done',
+    )
+    const item = rolled[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.status).toBe('done')
+    expect(item.pendingSteers).toEqual([])
+  })
+
+  it('clears undelivered pending steers and keeps delivered steers', () => {
+    const done = completeSubagentTimelineItem(
+      started(),
+      'sub-1',
+      'first pass',
+      'done',
+    )
+    const withSteer = appendSubagentToolEvent(done, 'sub-1', {
+      type: 'subagent-steer',
+      message: 'keep going',
+    })
+    const queued = queueSubagentSteer(withSteer, 'sub-1', 'then fix lint')
+    const cleared = clearQueuedSubagentSteers(queued, 'sub-1')
+    const item = cleared[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.steers).toEqual(['keep going'])
+    expect(item.pendingSteers).toEqual([])
   })
 })

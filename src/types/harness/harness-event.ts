@@ -107,3 +107,5 @@ export type HarnessEvent =
   | { type: 'compaction-started' }
   | { type: 'compaction-ended' }
   | { type: 'compaction'; summary: string; focus: string | null }
+  | { type: 'subagent-steer'; message: string }
+  | { type: 'subagent-history'; messages: unknown[] }

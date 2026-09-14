@@ -139,4 +139,11 @@ describe('spawn_subagent agentName validation', () => {
     })
     expect(start && 'description' in start).toBe(false)
   })
+
+  it('instructs the parent to review results and steer rather than spawn duplicates', () => {
+    const built = spawnSubagent(baseCtx())
+    expect(built.description).toContain('steer_subagent')
+    expect(built.description).toContain('Review each returned result')
+    expect(built.description).toContain('as each background subagent finishes')
+  })
 })

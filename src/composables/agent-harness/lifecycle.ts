@@ -3,10 +3,12 @@ import {
   abort as abortSubagentsForChat,
   abortOne,
   clearPendingBackgroundResume,
+  listSubagentsForChat,
 } from '@/services/harness/subagent/registry'
 import { killShellsForChat } from '@/services/harness/shell/registry'
 import { rejectPendingMcpAuthForChat } from '@/services/mcp/mcp-auth-gate'
 import { updateChatMeta } from '@/services/vixl/vixl-tauri'
+import waitUntilParentUnblocked from './wait-until-parent-unblocked'
 import type { QueuedChatMessage } from '@/types/chat/queued-chat-message'
 import type { SendArgs } from './send'
 import type { AgentHarnessState, AttentionHelpers } from './types'
@@ -30,10 +32,12 @@ export default (
     abortController,
     pendingMcpAuth,
     messageQueue,
+    suppressQueueDrainAfterStop,
   } = state
 
   const stopSubagent = (subagentId: string): void => {
     abortOne(subagentId)
+    session.clearLocalQueuedSubagentSteers(subagentId)
     session.completeLocalSubagent(subagentId, 'Stopped', 'stopped')
     subagents.value = subagents.value.map((item) =>
       item.subagentId === subagentId
@@ -44,17 +48,22 @@ export default (
   }
 
   const stop = async (): Promise<void> => {
+    suppressQueueDrainAfterStop.value = true
     abortController.value?.abort()
     rejectPendingMcpAuthForChat(options.chatId)
     pendingMcpAuth.value = []
     deps.stopMcpAuthPolling()
-    abortSubagentsForChat(options.chatId)
-    const runningIds = new Set(
-      subagents.value
+    const runningIds = new Set([
+      ...listSubagentsForChat(options.chatId)
+        .filter((record) => record.status === 'running')
+        .map((record) => record.subagentId),
+      ...subagents.value
         .filter((item) => item.status === 'running')
         .map((item) => item.subagentId),
-    )
+    ])
+    abortSubagentsForChat(options.chatId)
     for (const subagentId of runningIds) {
+      session.clearLocalQueuedSubagentSteers(subagentId)
       session.completeLocalSubagent(subagentId, 'Stopped', 'stopped')
     }
     if (runningIds.size > 0) {
@@ -95,6 +104,10 @@ export default (
     messageQueue.remove(id)
     await stop()
     clearPendingBackgroundResume(options.chatId)
+    await waitUntilParentUnblocked(state)
+    if (state.disposed.value) {
+      return
+    }
     try {
       await deps.send({
         text: item.text,
@@ -103,6 +116,8 @@ export default (
         model: item.model,
         reasoning: item.reasoning,
         mentions: item.mentions,
+        skipUserMessage: item.skipUserMessage,
+        skipUserPersist: item.skipUserPersist,
         internal: true,
       })
     } catch (err) {

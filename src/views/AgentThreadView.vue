@@ -111,41 +111,43 @@ const {
       @revert="handleFilePolicyRevert"
     />
     <div
-      v-if="!isSubagentView"
       class="shrink-0 px-4 pb-4 pt-2"
     >
       <div class="mx-auto flex w-full max-w-3xl flex-col">
-        <ChatPendingApprovals
-          v-if="harnessPendingApprovals.length > 0"
-          :approvals="harnessPendingApprovals"
-          class="mb-2 w-full"
-          @resolve="handleResolveApproval"
-        />
-        <ChatTodoTimeline
-          v-if="todos.length > 0"
-          :todos="todos"
-          class="mb-2 w-full"
-        />
-        <RunningTerminalsPanel
-          :shells="runningShells"
-          @open-shell="handleOpenShell"
-          @stop-shell="handleKillShell"
-        />
-        <ChatMessageQueue
-          v-if="queuedMessages.length > 0"
-          :items="queuedMessages"
-          class="mb-2 w-full"
-          @edit="handleQueueEdit"
-          @force="handleQueueForce"
-          @remove="handleQueueRemove"
-        />
+        <template v-if="!isSubagentView">
+          <ChatPendingApprovals
+            v-if="harnessPendingApprovals.length > 0"
+            :approvals="harnessPendingApprovals"
+            class="mb-2 w-full"
+            @resolve="handleResolveApproval"
+          />
+          <ChatTodoTimeline
+            v-if="todos.length > 0"
+            :todos="todos"
+            class="mb-2 w-full"
+          />
+          <RunningTerminalsPanel
+            :shells="runningShells"
+            @open-shell="handleOpenShell"
+            @stop-shell="handleKillShell"
+          />
+          <ChatMessageQueue
+            v-if="queuedMessages.length > 0"
+            :items="queuedMessages"
+            class="mb-2 w-full"
+            @edit="handleQueueEdit"
+            @force="handleQueueForce"
+            @remove="handleQueueRemove"
+          />
+        </template>
         <ChatPromptInput
           ref="chatPromptInputRef"
           :key="threadKey"
           :status="harnessStatus"
           :disabled="!threadReady"
           :permission-level="activePermissionLevel"
-          :waiting-on-background="isWaitingOnBackground"
+          :waiting-on-background="isSubagentView ? false : isWaitingOnBackground"
+          :allow-submit-while-busy="isSubagentView"
           @submit="handleSubmit"
           @submit-edit="handleSubmitEdit"
           @stop="handleStop"

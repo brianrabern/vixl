@@ -38,6 +38,7 @@ export const TOOL_DESCRIPTIONS: Record<string, string> = {
   update_plan_todo: 'Update a plan todo item',
   update_todos: 'Create, update, complete, cancel, or remove in-chat todos (full list)',
   spawn_subagent: 'Spawn sub-agent (background: end turn, harness resumes)',
+  steer_subagent: 'Send a follow-up to a spawned sub-agent',
   resolve_models:
     'Look up allowed model refs by query (capped)',
   web_fetch:

@@ -52,9 +52,25 @@ vi.mock('@/services/agents/registry', () => ({
   resolveAgentDefinition: (...args: unknown[]) => resolveAgentDefinition(...args),
 }))
 
+const hasPendingBackgroundResume = vi.hoisted(() =>
+  vi.fn<(chatId: string) => boolean>(() => false),
+)
+const hasRunningSubagentsForChat = vi.hoisted(() =>
+  vi.fn<(chatId: string) => boolean>(() => false),
+)
+const flushPendingBackgroundResume = vi.hoisted(() =>
+  vi.fn<(chatId: string) => void>(),
+)
+
 vi.mock('@/services/harness/subagent/registry', () => ({
-  hasPendingBackgroundResume: () => false,
-  hasRunningSubagentsForChat: () => false,
+  hasPendingBackgroundResume: (chatId: string) =>
+    hasPendingBackgroundResume(chatId),
+  hasRunningSubagentsForChat: (chatId: string) =>
+    hasRunningSubagentsForChat(chatId),
+}))
+
+vi.mock('@/services/harness/subagent/flush-pending-resume', () => ({
+  default: (chatId: string) => flushPendingBackgroundResume(chatId),
 }))
 
 const loadEffectiveSettings = vi.hoisted(() =>
@@ -142,6 +158,12 @@ const buildState = (): SendTestState => {
     messageQueue: {
       enqueue: vi.fn<(...args: unknown[]) => void>(),
     },
+    suppressQueueDrainAfterStop: ref(false),
+    pendingApprovals: ref([]),
+    pendingMcpAuth: ref([]),
+    chatStore: {
+      isSessionActive: vi.fn<() => boolean>().mockReturnValue(true),
+    },
   } as unknown as SendTestState
 }
 
@@ -165,6 +187,8 @@ describe('agent-harness send persist model/mode', () => {
     listAgentIndex.mockResolvedValue([])
     resolveAgentDefinition.mockResolvedValue(null)
     loadEffectiveSettings.mockResolvedValue({ version: 1 })
+    hasPendingBackgroundResume.mockReturnValue(false)
+    hasRunningSubagentsForChat.mockReturnValue(false)
   })
 
   it('persists model and mode via updateChatMeta before the turn', async () => {
@@ -248,6 +272,8 @@ describe('agent-harness send persist model/mode', () => {
       expect.objectContaining({ text: 'hello' }),
     )
     expect(runOrchestrator).not.toHaveBeenCalled()
+    expect(updateChatMeta).not.toHaveBeenCalled()
+    expect(state.lastRunConfig.value).toBeNull()
   })
 
   it('reuses the same session allow and deny sets on a second send', async () => {
@@ -754,6 +780,7 @@ describe('agent-harness send persist model/mode', () => {
 
     expect(state.session.appendLocalMessage).not.toHaveBeenCalled()
     expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
     expect(runOrchestrator).not.toHaveBeenCalled()
     expect(state.status.value).toBe('ready')
     expect(state.abortController.value).toBeNull()
@@ -798,6 +825,7 @@ describe('agent-harness send persist model/mode', () => {
     )
     expect(state.session.appendLocalMessage).not.toHaveBeenCalled()
     expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
     expect(state.session.setAgentTurnError).not.toHaveBeenCalled()
     expect(state.session.finishAgentTurn).not.toHaveBeenCalled()
     expect(attention.applyTurnEndAttention).not.toHaveBeenCalled()
@@ -836,5 +864,717 @@ describe('agent-harness send persist model/mode', () => {
       'Agent run failed',
       expect.objectContaining({ description: 'provider down' }),
     )
+  })
+
+  it('does not enqueue a user send while waiting on background subagents', async () => {
+    const state = buildState()
+    const attention = buildAttention()
+    attention.isWaitingOnBackground = () => true
+    attention.isParentBusy = () => false
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+    })
+
+    expect(state.messageQueue.enqueue).not.toHaveBeenCalled()
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps running subagents when a new parent send starts', async () => {
+    const state = buildState()
+    state.subagents.value = [
+      {
+        subagentId: 'run-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+      {
+        subagentId: 'done-1',
+        name: 'reviewer',
+        blocking: false,
+        status: 'done',
+        events: [],
+      },
+    ]
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    expect(state.subagents.value).toEqual([
+      expect.objectContaining({
+        subagentId: 'run-1',
+        status: 'running',
+      }),
+    ])
+  })
+
+  it('enqueues without a queue-full toast', async () => {
+    const state = buildState()
+    const attention = buildAttention()
+    attention.isParentBusy = () => true
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    for (let index = 0; index < 12; index += 1) {
+      await send({
+        text: `queued-${index}`,
+        mode: 'agent',
+        model: 'openai::gpt-4o',
+      })
+    }
+
+    expect(state.messageQueue.enqueue).toHaveBeenCalledTimes(12)
+    expect(toastError).not.toHaveBeenCalledWith(
+      'Queue is full',
+      expect.anything(),
+    )
+    expect(runOrchestrator).not.toHaveBeenCalled()
+  })
+
+  it('flushes pending background resume when a user send starts a turn', async () => {
+    hasPendingBackgroundResume.mockReturnValue(true)
+    const state = buildState()
+    state.subagents.value = [
+      {
+        subagentId: 'run-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+    ]
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+    })
+
+    expect(state.session.startAgentTurn).toHaveBeenCalledTimes(1)
+    expect(flushPendingBackgroundResume).toHaveBeenCalledWith('chat-1')
+    expect(flushPendingBackgroundResume.mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(state.session.startAgentTurn).mock.invocationCallOrder[0] ?? 0,
+    )
+    expect(state.messageQueue.enqueue).not.toHaveBeenCalled()
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+    expect(state.subagents.value).toEqual([
+      expect.objectContaining({
+        subagentId: 'run-1',
+        status: 'running',
+      }),
+    ])
+  })
+
+  it('leaves pending background resume intact when attachment normalize fails after submitted', async () => {
+    hasPendingBackgroundResume.mockReturnValue(true)
+    normalizeImageDataUrl.mockRejectedValueOnce(
+      new Error('Image could not be compressed under the 3.75MB provider limit'),
+    )
+    const state = buildState()
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'look',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      files: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'data:image/png;base64,AAA',
+          filename: 'shot.png',
+        },
+      ],
+    })
+
+    expect(state.status.value).toBe('ready')
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
+  })
+
+  it('does not clear stop-queue suppression when enqueueing while busy', async () => {
+    const state = buildState()
+    state.suppressQueueDrainAfterStop.value = true
+    const attention = buildAttention()
+    attention.isParentBusy = () => true
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'queued after stop',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+    })
+
+    expect(state.messageQueue.enqueue).toHaveBeenCalled()
+    expect(state.suppressQueueDrainAfterStop.value).toBe(true)
+    expect(runOrchestrator).not.toHaveBeenCalled()
+  })
+
+  it('does not clear stop-queue suppression on a failed send', async () => {
+    const state = buildState()
+    state.suppressQueueDrainAfterStop.value = true
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: '',
+    })
+
+    expect(toastError).toHaveBeenCalledWith('Select a model before sending')
+    expect(state.suppressQueueDrainAfterStop.value).toBe(true)
+    expect(runOrchestrator).not.toHaveBeenCalled()
+  })
+
+  it('does not clear stop-queue suppression when answering ask_user', async () => {
+    const state = buildState()
+    state.suppressQueueDrainAfterStop.value = true
+    state.session.pendingQuestion.value = {
+      toolCallId: 'q-1',
+      question: 'Which approach?',
+    }
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'use the first option',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+    })
+
+    expect(state.session.submitAnswer).toHaveBeenCalledWith(
+      'q-1',
+      'use the first option',
+    )
+    expect(state.suppressQueueDrainAfterStop.value).toBe(true)
+    expect(runOrchestrator).not.toHaveBeenCalled()
+  })
+
+  it('clears stop-queue suppression when a new turn starts', async () => {
+    const state = buildState()
+    state.suppressQueueDrainAfterStop.value = true
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    expect(state.session.startAgentTurn).toHaveBeenCalledTimes(1)
+    expect(state.suppressQueueDrainAfterStop.value).toBe(false)
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not flush pending resume on an internal send', async () => {
+    hasPendingBackgroundResume.mockReturnValue(true)
+    const state = buildState()
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+  })
+
+  it('enqueues when a background resume starts during settings load', async () => {
+    const state = buildState()
+    const resumeAbort = new AbortController()
+    loadEffectiveSettings.mockImplementation(async () => {
+      state.resumingBackgroundBatch.value = true
+      state.status.value = 'submitted'
+      state.abortController.value = resumeAbort
+      return { version: 1 }
+    })
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+    })
+
+    expect(state.messageQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'hello' }),
+    )
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
+    expect(state.abortController.value).toBe(resumeAbort)
+    expect(state.status.value).toBe('submitted')
+    expect(state.resumingBackgroundBatch.value).toBe(true)
+  })
+
+  it('does not flush pending resume when resume starts during send prep', async () => {
+    hasPendingBackgroundResume.mockReturnValue(true)
+    let resolveNormalize: (value: {
+      dataUrl: string
+      mediaType: string
+    }) => void = () => undefined
+    normalizeImageDataUrl.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNormalize = resolve
+      }),
+    )
+    const state = buildState()
+    const resumeAbort = new AbortController()
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    const sending = send({
+      text: 'look',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      files: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'data:image/png;base64,AAA',
+          filename: 'shot.png',
+        },
+      ],
+    })
+
+    await vi.waitFor(() => {
+      expect(normalizeImageDataUrl).toHaveBeenCalled()
+      expect(state.abortController.value).not.toBeNull()
+    })
+    const sendAbort = state.abortController.value
+    state.resumingBackgroundBatch.value = true
+    state.abortController.value = resumeAbort
+    resolveNormalize({
+      dataUrl: 'data:image/png;base64,BBB',
+      mediaType: 'image/png',
+    })
+    await sending
+
+    expect(state.messageQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'look',
+        skipUserMessage: true,
+        skipUserPersist: true,
+      }),
+    )
+    expect(state.session.appendLocalMessage).toHaveBeenCalledTimes(1)
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
+    expect(state.abortController.value).toBe(resumeAbort)
+    expect(state.abortController.value).not.toBe(sendAbort)
+    expect(state.status.value).toBe('submitted')
+  })
+
+  it('replays a defer after persist without a duplicate user message', async () => {
+    let resolveNormalize: (value: {
+      dataUrl: string
+      mediaType: string
+    }) => void = () => undefined
+    normalizeImageDataUrl.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNormalize = resolve
+      }),
+    )
+    const state = buildState()
+    const resumeAbort = new AbortController()
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    const sending = send({
+      text: 'look',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      files: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'data:image/png;base64,AAA',
+          filename: 'shot.png',
+        },
+      ],
+    })
+
+    await vi.waitFor(() => {
+      expect(normalizeImageDataUrl).toHaveBeenCalled()
+    })
+    state.resumingBackgroundBatch.value = true
+    state.abortController.value = resumeAbort
+    resolveNormalize({
+      dataUrl: 'data:image/png;base64,BBB',
+      mediaType: 'image/png',
+    })
+    await sending
+
+    const queued = vi.mocked(state.messageQueue.enqueue).mock.calls[0]?.[0] as {
+      text: string
+      files: unknown[]
+      mode: 'agent'
+      model: string
+      skipUserMessage?: boolean
+      skipUserPersist?: boolean
+    }
+    expect(queued.skipUserMessage).toBe(true)
+    expect(queued.skipUserPersist).toBe(true)
+    expect(state.session.appendLocalMessage).toHaveBeenCalledTimes(1)
+
+    state.resumingBackgroundBatch.value = false
+    state.status.value = 'ready'
+    state.abortController.value = null
+    await send({
+      text: queued.text,
+      files: queued.files as [],
+      mode: queued.mode,
+      model: queued.model,
+      skipUserMessage: queued.skipUserMessage,
+      skipUserPersist: queued.skipUserPersist,
+      internal: true,
+    })
+
+    expect(state.session.appendLocalMessage).toHaveBeenCalledTimes(1)
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+    expect(runOrchestrator).toHaveBeenCalledWith(
+      expect.objectContaining({ skipUserPersist: true }),
+    )
+  })
+
+  it('appends the user message once when a defer happens before persist', async () => {
+    const state = buildState()
+    const resumeAbort = new AbortController()
+    loadEffectiveSettings.mockImplementationOnce(async () => {
+      state.resumingBackgroundBatch.value = true
+      state.status.value = 'submitted'
+      state.abortController.value = resumeAbort
+      return { version: 1 }
+    })
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+    })
+
+    const queued = vi.mocked(state.messageQueue.enqueue).mock.calls[0]?.[0] as {
+      text: string
+      files: unknown[]
+      mode: 'agent'
+      model: string
+      skipUserMessage?: boolean
+      skipUserPersist?: boolean
+    }
+    expect(queued.skipUserMessage).toBeUndefined()
+    expect(queued.skipUserPersist).toBeUndefined()
+    expect(state.session.appendLocalMessage).not.toHaveBeenCalled()
+
+    state.resumingBackgroundBatch.value = false
+    state.status.value = 'ready'
+    state.abortController.value = null
+    await send({
+      text: queued.text,
+      files: queued.files as [],
+      mode: queued.mode,
+      model: queued.model,
+      skipUserMessage: queued.skipUserMessage,
+      skipUserPersist: queued.skipUserPersist,
+      internal: true,
+    })
+
+    expect(state.session.appendLocalMessage).toHaveBeenCalledTimes(1)
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+    expect(runOrchestrator).toHaveBeenCalledWith(
+      expect.objectContaining({ skipUserPersist: undefined }),
+    )
+  })
+
+  it('starts immediately while background subagents are running and not resuming', async () => {
+    hasRunningSubagentsForChat.mockReturnValue(true)
+    const state = buildState()
+    state.subagents.value = [
+      {
+        subagentId: 'run-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+    ]
+    const attention = createHelpers(state)
+    expect(attention.isWaitingOnBackground()).toBe(true)
+    expect(attention.isParentBusy()).toBe(false)
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+    })
+
+    expect(state.messageQueue.enqueue).not.toHaveBeenCalled()
+    expect(state.session.startAgentTurn).toHaveBeenCalledTimes(1)
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+    expect(state.subagents.value).toEqual([
+      expect.objectContaining({
+        subagentId: 'run-1',
+        status: 'running',
+      }),
+    ])
+  })
+
+  it('defers an internal send while compacting instead of overlapping', async () => {
+    const state = buildState()
+    state.compacting.value = true
+    const priorConfig = {
+      mode: 'plan' as const,
+      model: 'openai::gpt-4.1',
+      mentions: [],
+      effectiveSettings: { version: 1 as const },
+    }
+    state.lastRunConfig.value = priorConfig
+    state.subagents.value = [
+      {
+        subagentId: 'run-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+      {
+        subagentId: 'done-1',
+        name: 'reviewer',
+        blocking: false,
+        status: 'done',
+        events: [],
+      },
+    ]
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'queued drain',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    expect(state.messageQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'queued drain', skipUserMessage: true }),
+    )
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
+    expect(updateChatMeta).not.toHaveBeenCalled()
+    expect(state.session.patchMeta).not.toHaveBeenCalled()
+    expect(state.lastRunConfig.value).toEqual(priorConfig)
+    expect(state.subagents.value).toHaveLength(2)
+    expect(state.status.value).toBe('ready')
+  })
+
+  it('keeps skipUserPersist on a deferred retry replay', async () => {
+    const state = buildState()
+    state.compacting.value = true
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'retry me',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      skipUserPersist: true,
+      internal: true,
+    })
+
+    const queued = vi.mocked(state.messageQueue.enqueue).mock.calls[0]?.[0] as {
+      text: string
+      files: unknown[]
+      mode: 'agent'
+      model: string
+      skipUserMessage?: boolean
+      skipUserPersist?: boolean
+    }
+    expect(queued.skipUserMessage).toBe(true)
+    expect(queued.skipUserPersist).toBe(true)
+    expect(runOrchestrator).not.toHaveBeenCalled()
+
+    state.compacting.value = false
+    state.status.value = 'ready'
+    state.abortController.value = null
+    await send({
+      text: queued.text,
+      files: queued.files as [],
+      mode: queued.mode,
+      model: queued.model,
+      skipUserMessage: queued.skipUserMessage,
+      skipUserPersist: queued.skipUserPersist,
+      internal: true,
+    })
+
+    expect(state.session.appendLocalMessage).not.toHaveBeenCalled()
+    expect(runOrchestrator).toHaveBeenCalledTimes(1)
+    expect(runOrchestrator).toHaveBeenCalledWith(
+      expect.objectContaining({ skipUserPersist: true }),
+    )
+  })
+
+  it('leaves lastRunConfig, subagents, and chat meta untouched when a send defers', async () => {
+    let resolveNormalize: (value: {
+      dataUrl: string
+      mediaType: string
+    }) => void = () => undefined
+    normalizeImageDataUrl.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNormalize = resolve
+      }),
+    )
+    const state = buildState()
+    const priorConfig = {
+      mode: 'plan' as const,
+      model: 'openai::gpt-4.1',
+      mentions: [],
+      effectiveSettings: { version: 1 as const },
+    }
+    state.lastRunConfig.value = priorConfig
+    state.subagents.value = [
+      {
+        subagentId: 'run-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+      {
+        subagentId: 'done-1',
+        name: 'reviewer',
+        blocking: false,
+        status: 'done',
+        events: [],
+      },
+    ]
+    const resumeAbort = new AbortController()
+    const { send } = createSend(state, createHelpers(state), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    const sending = send({
+      text: 'look',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      files: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'data:image/png;base64,AAA',
+          filename: 'shot.png',
+        },
+      ],
+    })
+
+    await vi.waitFor(() => {
+      expect(normalizeImageDataUrl).toHaveBeenCalled()
+    })
+    state.resumingBackgroundBatch.value = true
+    state.abortController.value = resumeAbort
+    resolveNormalize({
+      dataUrl: 'data:image/png;base64,BBB',
+      mediaType: 'image/png',
+    })
+    await sending
+
+    expect(state.messageQueue.enqueue).toHaveBeenCalled()
+    expect(updateChatMeta).not.toHaveBeenCalled()
+    expect(state.session.patchMeta).not.toHaveBeenCalled()
+    expect(state.lastRunConfig.value).toEqual(priorConfig)
+    expect(state.subagents.value).toHaveLength(2)
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
   })
 })

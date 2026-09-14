@@ -55,6 +55,20 @@ describe('mode allowlists spawn_subagent', () => {
   })
 })
 
+describe('mode allowlists steer_subagent', () => {
+  it('includes steer_subagent in ask, plan, agent, and orchestrator', () => {
+    expect(MODE_TOOL_ALLOWLIST.ask).toContain('steer_subagent')
+    expect(MODE_TOOL_ALLOWLIST.plan).toContain('steer_subagent')
+    expect(MODE_TOOL_ALLOWLIST.agent).toContain('steer_subagent')
+    expect(MODE_TOOL_ALLOWLIST.orchestrator).toContain('steer_subagent')
+  })
+
+  it('does not include steer_subagent in subagent tool sets', () => {
+    expect(SUBAGENT_READ_ONLY_TOOLS).not.toContain('steer_subagent')
+    expect(SUBAGENT_WRITE_TOOLS).not.toContain('steer_subagent')
+  })
+})
+
 describe('mode allowlists mcp tools', () => {
   const mcpTools = [
     'call_mcp_tool',

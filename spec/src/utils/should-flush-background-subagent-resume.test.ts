@@ -24,13 +24,35 @@ describe('shouldFlushBackgroundSubagentResume', () => {
     ).toBe('noop')
   })
 
-  it('waits while siblings are still running', () => {
+  it('does not resume a deliverable result while the parent is busy and siblings still run', () => {
+    expect(
+      shouldFlushBackgroundSubagentResume({
+        parentBusy: true,
+        hasPending: true,
+        hasRunning: true,
+        deliverableCount: 1,
+      }),
+    ).toBe('noop')
+  })
+
+  it('resumes a finished subagent while siblings are still running', () => {
     expect(
       shouldFlushBackgroundSubagentResume({
         parentBusy: false,
         hasPending: true,
         hasRunning: true,
         deliverableCount: 1,
+      }),
+    ).toBe('resume')
+  })
+
+  it('waits while siblings are still running and nothing is deliverable', () => {
+    expect(
+      shouldFlushBackgroundSubagentResume({
+        parentBusy: false,
+        hasPending: true,
+        hasRunning: true,
+        deliverableCount: 0,
       }),
     ).toBe('noop')
   })

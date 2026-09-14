@@ -5,7 +5,12 @@ import type { StagedImage } from '@/types/harness/staged-image'
 import estimateTextTokens from '@/utils/estimate-text-tokens'
 
 const generateText = vi.hoisted(() =>
-  vi.fn<(...args: unknown[]) => Promise<{ text: string; usage?: unknown }>>(),
+  vi.fn<(...args: unknown[]) => Promise<{
+    text: string
+    usage?: unknown
+    response?: { messages?: unknown[] }
+    responseMessages?: unknown[]
+  }>>(),
 )
 const createModel = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(),
@@ -37,6 +42,14 @@ const buildHarnessTools = vi.hoisted(() =>
     }),
   ),
 )
+const compactStep = vi.hoisted(() =>
+  vi.fn<(options: { messages: unknown[] }) => Promise<{ messages?: unknown[] } | undefined>>(
+    async () => undefined,
+  ),
+)
+const prepareCompactStep = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => typeof compactStep>(() => compactStep),
+)
 
 vi.mock('ai', () => ({
   generateText: (...args: unknown[]) => generateText(...args),
@@ -59,7 +72,17 @@ vi.mock('@/services/harness/build-harness-tools', () => ({
   default: (...args: unknown[]) => buildHarnessTools(...args),
 }))
 
+vi.mock('@/services/harness/subagent/prepare-compact-step', () => ({
+  default: (...args: unknown[]) => prepareCompactStep(...args),
+}))
+
 import runSubagentGenerate from '@/services/harness/subagent/run-generate'
+import { pushSteer } from '@/services/harness/subagent/inbox'
+import {
+  getSubagent,
+  register,
+  resetSubagentRegistryForTests,
+} from '@/services/harness/subagent/registry'
 
 type GenerateConfig = {
   tools?: Record<string, { execute?: (...args: never[]) => Promise<unknown> }>
@@ -87,10 +110,16 @@ const baseCtx = (): HarnessToolContext => ({
 describe('runSubagentGenerate compaction wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetSubagentRegistryForTests()
     createModel.mockResolvedValue({ id: 'stub-model' })
     captureBillableUsage.mockResolvedValue(undefined)
     resolveAgentDefinition.mockResolvedValue(null)
-    generateText.mockResolvedValue({ text: 'summary', usage: {} })
+    generateText.mockResolvedValue({
+      text: 'summary',
+      usage: {},
+      response: { messages: [{ role: 'assistant', content: 'summary' }] },
+    })
+    compactStep.mockResolvedValue(undefined)
   })
 
   it('wraps nested tools and passes prepareStep to generateText', async () => {
@@ -123,6 +152,7 @@ describe('runSubagentGenerate compaction wiring', () => {
 describe('runSubagentGenerate capabilities', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetSubagentRegistryForTests()
     createModel.mockResolvedValue({ id: 'stub-model' })
     captureBillableUsage.mockResolvedValue(undefined)
     resolveAgentDefinition.mockResolvedValue(null)
@@ -177,6 +207,7 @@ describe('runSubagentGenerate capabilities', () => {
 describe('runSubagentGenerate pending approval tagging', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetSubagentRegistryForTests()
     createModel.mockResolvedValue({ id: 'stub-model' })
     captureBillableUsage.mockResolvedValue(undefined)
     resolveAgentDefinition.mockResolvedValue(null)
@@ -257,6 +288,7 @@ describe('runSubagentGenerate pending approval tagging', () => {
 describe('runSubagentGenerate agent definition', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetSubagentRegistryForTests()
     createModel.mockResolvedValue({ id: 'stub-model' })
     captureBillableUsage.mockResolvedValue(undefined)
     resolveAgentDefinition.mockResolvedValue(null)
@@ -288,5 +320,184 @@ describe('runSubagentGenerate agent definition', () => {
     const config = generateText.mock.calls[0]?.[0] as GenerateConfig
     expect(config.system).toContain('Agent definition:')
     expect(config.system).toContain('Review the diff carefully and report risks.')
+  })
+})
+
+describe('runSubagentGenerate steer prepareStep', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetSubagentRegistryForTests()
+    createModel.mockResolvedValue({ id: 'stub-model' })
+    captureBillableUsage.mockResolvedValue(undefined)
+    resolveAgentDefinition.mockResolvedValue(null)
+    generateText.mockResolvedValue({
+      text: 'summary',
+      usage: {},
+      responseMessages: [{ role: 'assistant', content: 'summary' }],
+    })
+    compactStep.mockResolvedValue(undefined)
+  })
+
+  const runAndPrepare = async () => {
+    const events: unknown[] = []
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'call-1',
+      agentName: 'explore',
+      prompt: 'find the auth bug',
+      model: 'local::qwen',
+    })
+    await runSubagentGenerate({
+      ctx: {
+        ...baseCtx(),
+        onHarnessEvent: (event) => {
+          events.push(event)
+        },
+      },
+      subagentId: 'sub-1',
+      agentName: 'explore',
+      prompt: 'find the auth bug',
+      toolCallId: 'call-1',
+      signal: new AbortController().signal,
+      model: 'local::qwen',
+      capabilities: 'read-only',
+    })
+    const config = generateText.mock.calls[0]?.[0] as GenerateConfig
+    const prepareStep = config.prepareStep as (options: {
+      messages: { role: string; content: string }[]
+    }) => Promise<{ messages?: unknown[] } | undefined>
+    return { prepareStep, events }
+  }
+
+  it('appends drained steers then runs compaction on the combined messages', async () => {
+    const { prepareStep, events } = await runAndPrepare()
+    pushSteer('sub-1', 'first steer')
+    pushSteer('sub-1', 'second steer')
+    const original = [{ role: 'user' as const, content: 'original task' }]
+
+    const result = await prepareStep({ messages: original })
+
+    expect(compactStep).toHaveBeenCalledWith({
+      messages: [
+        { role: 'user', content: 'original task' },
+        { role: 'user', content: 'first steer' },
+        { role: 'user', content: 'second steer' },
+      ],
+    })
+    expect(result).toEqual({
+      messages: [
+        { role: 'user', content: 'original task' },
+        { role: 'user', content: 'first steer' },
+        { role: 'user', content: 'second steer' },
+      ],
+    })
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'subagent-event',
+          event: { type: 'subagent-steer', message: 'first steer' },
+        }),
+        expect.objectContaining({
+          type: 'subagent-event',
+          event: { type: 'subagent-steer', message: 'second steer' },
+        }),
+      ]),
+    )
+  })
+
+  it('still invokes compaction when a steer would exceed the window', async () => {
+    compactStep.mockResolvedValue({
+      messages: [{ role: 'user', content: 'compacted' }],
+    })
+    const { prepareStep } = await runAndPrepare()
+    pushSteer('sub-1', 'huge follow-up')
+
+    await expect(
+      prepareStep({
+        messages: [{ role: 'user', content: 'original task' }],
+      }),
+    ).resolves.toEqual({
+      messages: [{ role: 'user', content: 'compacted' }],
+    })
+    expect(compactStep).toHaveBeenCalledTimes(1)
+  })
+
+  it('stores the initial prompt plus response messages when the run completes', async () => {
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'call-1',
+      agentName: 'explore',
+      model: 'local::qwen',
+    })
+    await runSubagentGenerate({
+      ctx: baseCtx(),
+      subagentId: 'sub-1',
+      agentName: 'explore',
+      prompt: 'find the auth bug',
+      toolCallId: 'call-1',
+      signal: new AbortController().signal,
+      model: 'local::qwen',
+      capabilities: 'read-only',
+    })
+
+    const stored = getSubagent('sub-1')?.messages
+    expect(stored?.[0]).toEqual(
+      expect.objectContaining({
+        role: 'user',
+        content: expect.stringContaining('find the auth bug'),
+      }),
+    )
+    expect(stored?.at(-1)).toEqual({
+      role: 'assistant',
+      content: 'summary',
+    })
+  })
+
+  it('writes each compacted snapshot into the registry before persist', async () => {
+    const firstCompacted = [{ role: 'user' as const, content: 'compacted-1' }]
+    const secondCompacted = [{ role: 'user' as const, content: 'compacted-2' }]
+    const midRunSnapshots: unknown[][] = []
+
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'call-1',
+      agentName: 'explore',
+      model: 'local::qwen',
+    })
+    compactStep
+      .mockResolvedValueOnce({ messages: firstCompacted })
+      .mockResolvedValueOnce({ messages: secondCompacted })
+    generateText.mockImplementation(async (config) => {
+      const prepareStep = (config as GenerateConfig).prepareStep as (options: {
+        messages: { role: string; content: string }[]
+      }) => Promise<{ messages?: unknown[] } | undefined>
+      await prepareStep({
+        messages: [{ role: 'user', content: 'long-1' }],
+      })
+      midRunSnapshots.push([...(getSubagent('sub-1')?.messages ?? [])])
+      await prepareStep({
+        messages: [{ role: 'user', content: 'long-2' }],
+      })
+      midRunSnapshots.push([...(getSubagent('sub-1')?.messages ?? [])])
+      return {
+        text: 'summary',
+        usage: {},
+        response: { messages: [{ role: 'assistant', content: 'summary' }] },
+      }
+    })
+
+    await runSubagentGenerate({
+      ctx: baseCtx(),
+      subagentId: 'sub-1',
+      agentName: 'explore',
+      prompt: 'find the auth bug',
+      toolCallId: 'call-1',
+      signal: new AbortController().signal,
+      model: 'local::qwen',
+      capabilities: 'read-only',
+    })
+
+    expect(midRunSnapshots).toEqual([firstCompacted, secondCompacted])
+    expect(getSubagent('sub-1')?.messages).toEqual([
+      ...secondCompacted,
+      { role: 'assistant', content: 'summary' },
+    ])
   })
 })

@@ -152,6 +152,26 @@ export const appendSubagentToolEvent = (
     }
     return next
   }
+  if (event.type === 'subagent-steer') {
+    const pending = [...(existing.pendingSteers ?? [])]
+    if (pending[0] === event.message) {
+      pending.shift()
+    }
+    next[index] = {
+      ...existing,
+      status: 'running',
+      steers: [...(existing.steers ?? []), event.message],
+      pendingSteers: pending,
+    }
+    return next
+  }
+  if (event.type === 'subagent-history') {
+    next[index] = {
+      ...existing,
+      messages: event.messages,
+    }
+    return next
+  }
   next[index] = {
     ...existing,
     tools: applySubagentToolEvent(existing.tools, event),
@@ -179,6 +199,85 @@ export const setSubagentPrompt = (
   next[index] = {
     ...existing,
     prompt,
+  }
+  return next
+}
+
+export const queueSubagentSteer = (
+  items: ChatTimelineItem[],
+  subagentId: string,
+  message: string,
+): ChatTimelineItem[] => {
+  const index = items.findIndex(
+    (item) => item.type === 'subagent' && item.subagentId === subagentId,
+  )
+  if (index < 0) {
+    return items
+  }
+  const existing = items[index]
+  if (existing?.type !== 'subagent') {
+    return items
+  }
+  const next = [...items]
+  next[index] = {
+    ...existing,
+    status: 'running',
+    pendingSteers: [...(existing.pendingSteers ?? []), message],
+  }
+  return next
+}
+
+export const rollbackQueuedSubagentSteer = (
+  items: ChatTimelineItem[],
+  subagentId: string,
+  message: string,
+  status: SubagentTimelineItem['status'],
+): ChatTimelineItem[] => {
+  const index = items.findIndex(
+    (item) => item.type === 'subagent' && item.subagentId === subagentId,
+  )
+  if (index < 0) {
+    return items
+  }
+  const existing = items[index]
+  if (existing?.type !== 'subagent') {
+    return items
+  }
+  const pending = [...(existing.pendingSteers ?? [])]
+  const lastIndex = pending.lastIndexOf(message)
+  if (lastIndex >= 0) {
+    pending.splice(lastIndex, 1)
+  }
+  const next = [...items]
+  next[index] = {
+    ...existing,
+    pendingSteers: pending,
+    status: pending.length > 0 ? 'running' : status,
+  }
+  return next
+}
+
+export const clearQueuedSubagentSteers = (
+  items: ChatTimelineItem[],
+  subagentId: string,
+): ChatTimelineItem[] => {
+  const index = items.findIndex(
+    (item) => item.type === 'subagent' && item.subagentId === subagentId,
+  )
+  if (index < 0) {
+    return items
+  }
+  const existing = items[index]
+  if (existing?.type !== 'subagent') {
+    return items
+  }
+  if ((existing.pendingSteers ?? []).length === 0) {
+    return items
+  }
+  const next = [...items]
+  next[index] = {
+    ...existing,
+    pendingSteers: [],
   }
   return next
 }

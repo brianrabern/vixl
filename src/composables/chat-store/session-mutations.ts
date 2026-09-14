@@ -3,9 +3,8 @@ import type { UIMessage } from 'ai'
 import type { AgentTurn } from '@/types/chat/agent-turn'
 import type { AgentTurnError } from '@/types/chat/agent-turn-error'
 import type { ChatMeta } from '@/types/chat/chat-meta'
-import type { SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { PendingQuestionState } from '@/types/chat/pending-question'
-import type { TodoItem, HarnessEvent } from '@/types/harness/harness-event'
+import type { TodoItem } from '@/types/harness/harness-event'
 import { resolveQuestion } from '@/services/harness/permission/question-gate'
 import { chatMetaSchema } from '@/schemas/chat-meta'
 import { readChatMeta } from '@/services/vixl/vixl-tauri'
@@ -21,24 +20,20 @@ import {
   mapMeta,
   todosFromTimeline,
 } from './helpers'
-import {
-  appendSubagentToolEvent,
-  completeSubagentTimelineItem,
-  setSubagentPrompt,
-  upsertSubagentStart,
-  upsertTodoTimelineItem,
-} from './timeline'
+import { upsertTodoTimelineItem } from './timeline'
 import {
   rebuildMessagesFromTimeline,
   updateTimelineTurn,
 } from './message-parsing'
 import createSessionAgentOps from './session-agent-ops'
+import createSessionSubagentOps from './session-subagent-ops'
 import type { ChatSession, SessionMutations } from './types'
 
 const sessionBindings = new WeakMap<ChatSession, SessionMutations>()
 
 export const createSessionMutations = (session: ChatSession): SessionMutations => {
   const agent = createSessionAgentOps(session)
+  const subagent = createSessionSubagentOps(session)
 
   const findUserMessage = (messageId: string): UIMessage | null => {
     const item = session.timeline.value.find(
@@ -148,47 +143,7 @@ export const createSessionMutations = (session: ChatSession): SessionMutations =
       }
       session.timeline.value = upsertTodoTimelineItem(session.timeline.value, todos)
     },
-    upsertLocalSubagentStart: (subagent: {
-      subagentId: string
-      toolCallId?: string
-      name: string
-      blocking: boolean
-      prompt?: string
-      model?: string
-    }): void => {
-      session.timeline.value = upsertSubagentStart(session.timeline.value, subagent)
-    },
-    appendLocalSubagentToolEvent: (
-      subagentId: string,
-      event: HarnessEvent,
-    ): void => {
-      session.timeline.value = appendSubagentToolEvent(
-        session.timeline.value,
-        subagentId,
-        event,
-      )
-    },
-    setLocalSubagentPrompt: (subagentId: string, prompt: string): void => {
-      session.timeline.value = setSubagentPrompt(session.timeline.value, subagentId, prompt)
-    },
-    completeLocalSubagent: (
-      subagentId: string,
-      summary: string,
-      status: Exclude<SubagentTimelineItem['status'], 'running'> = 'done',
-    ): void => {
-      session.timeline.value = completeSubagentTimelineItem(
-        session.timeline.value,
-        subagentId,
-        summary,
-        status,
-      )
-    },
-    getSubagent: (subagentId: string): SubagentTimelineItem | null => {
-      const item = session.timeline.value.find(
-        (entry) => entry.type === 'subagent' && entry.subagentId === subagentId,
-      )
-      return item?.type === 'subagent' ? item : null
-    },
+    ...subagent,
     setPendingQuestion: (question: PendingQuestionState): void => {
       session.pendingQuestion.value = question
     },

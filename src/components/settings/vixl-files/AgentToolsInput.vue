@@ -76,7 +76,7 @@ const TOOL_CATEGORIES: Array<{ label: string; tools: string[] }> = [
   },
   {
     label: 'Subagents',
-    tools: ['spawn_subagent'],
+    tools: ['spawn_subagent', 'steer_subagent'],
   },
   {
     label: 'Skills',

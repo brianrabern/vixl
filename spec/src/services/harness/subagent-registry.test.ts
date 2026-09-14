@@ -224,4 +224,185 @@ describe('subagent-registry', () => {
       },
     ])
   })
+
+  it('keeps pending resume across a partial flush while a sibling is still running', async () => {
+    const {
+      register,
+      resolve,
+      listDeliverableBackgroundResults,
+      markBackgroundResultsDelivered,
+      hasPendingBackgroundResume,
+      hasRunningSubagentsForChat,
+    } = await import('@/services/harness/subagent/registry')
+
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'tc-1',
+      agentName: 'one',
+    })
+    register('chat-1', 'sub-2', new AbortController(), {
+      toolCallId: 'tc-2',
+      agentName: 'two',
+    })
+    resolve('sub-1', {
+      subagentId: 'sub-1',
+      name: 'one',
+      summary: 'ok',
+    })
+
+    const first = listDeliverableBackgroundResults('chat-1')
+    expect(first).toHaveLength(1)
+    markBackgroundResultsDelivered(
+      'chat-1',
+      first.map((item) => item.toolCallId),
+    )
+
+    expect(hasPendingBackgroundResume('chat-1')).toBe(true)
+    expect(hasRunningSubagentsForChat('chat-1')).toBe(true)
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([])
+
+    resolve('sub-2', {
+      subagentId: 'sub-2',
+      name: 'two',
+      summary: 'later',
+    })
+    expect(listDeliverableBackgroundResults('chat-1')).toHaveLength(1)
+    expect(hasPendingBackgroundResume('chat-1')).toBe(true)
+  })
+
+  it('reopens a completed subagent back to running', async () => {
+    const { register, resolve, reopen, getSubagent } = await import(
+      '@/services/harness/subagent/registry'
+    )
+
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'tc-1',
+      agentName: 'explorer',
+    })
+    resolve('sub-1', {
+      subagentId: 'sub-1',
+      name: 'explorer',
+      summary: 'done',
+    })
+
+    const controller = new AbortController()
+    expect(reopen('sub-1', controller)?.status).toBe('running')
+    expect(getSubagent('sub-1')?.result).toBeUndefined()
+    expect(reopen('sub-1', new AbortController())).toBeNull()
+  })
+
+  it('makes a previously delivered result deliverable again after reopen', async () => {
+    const {
+      register,
+      resolve,
+      reopen,
+      listDeliverableBackgroundResults,
+      markBackgroundResultsDelivered,
+      hasPendingBackgroundResume,
+    } = await import('@/services/harness/subagent/registry')
+
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'tc-1',
+      agentName: 'explorer',
+    })
+    resolve('sub-1', {
+      subagentId: 'sub-1',
+      name: 'explorer',
+      summary: 'first',
+    })
+    markBackgroundResultsDelivered('chat-1', ['tc-1'])
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([])
+
+    expect(reopen('sub-1', new AbortController())?.status).toBe('running')
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([])
+    expect(hasPendingBackgroundResume('chat-1')).toBe(true)
+
+    resolve('sub-1', {
+      subagentId: 'sub-1',
+      name: 'explorer',
+      summary: 'rewritten',
+    })
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([
+      {
+        toolCallId: 'tc-1',
+        result: {
+          subagentId: 'sub-1',
+          name: 'explorer',
+          summary: 'rewritten',
+        },
+      },
+    ])
+  })
+
+  it('reopens a delivered result while a sibling is still running', async () => {
+    const {
+      register,
+      resolve,
+      reopen,
+      listDeliverableBackgroundResults,
+      markBackgroundResultsDelivered,
+      hasRunningSubagentsForChat,
+    } = await import('@/services/harness/subagent/registry')
+
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'tc-1',
+      agentName: 'one',
+    })
+    register('chat-1', 'sub-2', new AbortController(), {
+      toolCallId: 'tc-2',
+      agentName: 'two',
+    })
+    resolve('sub-1', {
+      subagentId: 'sub-1',
+      name: 'one',
+      summary: 'first',
+    })
+    markBackgroundResultsDelivered('chat-1', ['tc-1'])
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([])
+    expect(hasRunningSubagentsForChat('chat-1')).toBe(true)
+
+    reopen('sub-1', new AbortController())
+    resolve('sub-1', {
+      subagentId: 'sub-1',
+      name: 'one',
+      summary: 'steered',
+    })
+
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([
+      {
+        toolCallId: 'tc-1',
+        result: {
+          subagentId: 'sub-1',
+          name: 'one',
+          summary: 'steered',
+        },
+      },
+    ])
+    expect(hasRunningSubagentsForChat('chat-1')).toBe(true)
+  })
+
+  it('clears the steer inbox when aborting a subagent or chat', async () => {
+    const { register, abort, abortOne } = await import(
+      '@/services/harness/subagent/registry'
+    )
+    const { pushSteer, drainSteers } = await import(
+      '@/services/harness/subagent/inbox'
+    )
+
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'tc-1',
+      agentName: 'one',
+    })
+    register('chat-1', 'sub-2', new AbortController(), {
+      toolCallId: 'tc-2',
+      agentName: 'two',
+    })
+    pushSteer('sub-1', 'one steer')
+    pushSteer('sub-2', 'two steer')
+
+    abortOne('sub-1')
+    expect(drainSteers('sub-1')).toEqual([])
+
+    abort('chat-1')
+    expect(drainSteers('sub-2')).toEqual([])
+  })
 })

@@ -7,15 +7,18 @@ import type { ReasoningLevel } from '@/types/models/reasoning-level'
 import type { VixlChatMode, VixlSettings } from '@/types/vixl/vixl-settings'
 import runOrchestrator from '@/services/harness/orchestrator'
 import listConfiguredProviders from '@/services/providers/list-configured-providers'
-import { updateChatMeta } from '@/services/vixl/vixl-tauri'
 import parseModelRef from '@/utils/parse-model-ref'
-import { listSlashSkillIndex } from '@/services/skills/skill-registry'
 import { listAgentIndex } from '@/services/agents/registry'
 import dropUnresolvedAgentMentions from '@/services/agents/drop-unresolved-agent-mentions'
-import buildMentionHighlights from '@/utils/build-mention-highlights'
 import collectExplicitAgentMentions from '@/utils/collect-explicit-agent-mentions'
 import { loadEffectiveSettings } from '@/services/config/vixl-config'
+import flushPendingBackgroundResume from '@/services/harness/subagent/flush-pending-resume'
+import { hasPendingBackgroundResume } from '@/services/harness/subagent/registry'
 import normalizeAttachmentFiles from '@/utils/normalize-attachment-files'
+import appendSendUserMessage from './append-send-user-message'
+import applyParentTurnStart from './apply-parent-turn-start'
+import deferOverlappingParentTurn from './defer-overlapping-parent-turn'
+import enqueueComposerSend from './enqueue-composer-send'
 import type { AgentHarnessState, AttentionHelpers } from './types'
 
 export type SendArgs = {
@@ -28,9 +31,8 @@ export type SendArgs = {
   skipUserMessage?: boolean
   skipUserPersist?: boolean
   // Internal sends (drain, retry, edit, forceSendQueued) bypass the outbound
-  // queue and fall through to the streaming/submitted guard below. Only
-  // user-initiated sends from the composer enqueue when the harness is busy
-  // or waiting on background subagents.
+  // composer busy enqueue. They still defer when compaction or a background
+  // resume is in flight: drain/retry/edit re-enqueue, force-send waits first.
   internal?: boolean
 }
 
@@ -56,13 +58,14 @@ export default (
     status,
     error,
     toolRuns,
-    subagents,
     abortController,
-    lastRunConfig,
+    resumingBackgroundBatch,
+    compacting,
     sessionPermissionLevel,
     contextBudgetSync,
     fleetSidebar,
     messageQueue,
+    suppressQueueDrainAfterStop,
   } = state
 
   const send = async (args: SendArgs): Promise<void> => {
@@ -73,21 +76,8 @@ export default (
       return
     }
 
-    if (!args.internal && (attention.isParentBusy() || attention.isWaitingOnBackground())) {
-      try {
-        messageQueue.enqueue({
-          text: args.text,
-          files: args.files ?? [],
-          mode: args.mode,
-          model: args.model,
-          reasoning: args.reasoning,
-          mentions: args.mentions,
-        })
-      } catch {
-        toast.error('Queue is full', {
-          description: 'Remove a queued message first',
-        })
-      }
+    if (!args.internal && attention.isParentBusy()) {
+      enqueueComposerSend(messageQueue, args)
       return
     }
 
@@ -130,10 +120,14 @@ export default (
       return
     }
 
+    if (!args.internal && attention.isParentBusy()) {
+      enqueueComposerSend(messageQueue, args)
+      return
+    }
+
     error.value = null
     status.value = 'submitted'
     toolRuns.value = []
-    subagents.value = []
 
     const agentIndex = await listAgentIndex(projectRoot).catch(() => [])
     const mentions = await dropUnresolvedAgentMentions(
@@ -141,28 +135,7 @@ export default (
       projectRoot,
     )
 
-    lastRunConfig.value = {
-      mode: args.mode,
-      model: args.model,
-      reasoning: args.reasoning,
-      mentions,
-      effectiveSettings: chatSettings,
-    }
-    contextBudgetSync.setDraftMentions(mentions)
-
-    try {
-      await updateChatMeta(options.projectSlug, options.chatId, {
-        model: args.model,
-        mode: args.mode,
-      })
-      session.patchMeta({ model: args.model, mode: args.mode })
-    } catch (metaError) {
-      toast.error('Failed to save chat model', {
-        description:
-          metaError instanceof Error ? metaError.message : 'Unknown error',
-      })
-    }
-
+    const previousAbort = abortController.value
     const controller = new AbortController()
     abortController.value = controller
     let turnStarted = false
@@ -183,65 +156,24 @@ export default (
         return
       }
 
+      let userMessageAppended = false
       if (!args.skipUserMessage) {
-        const parts: Array<
-          | { type: 'text'; text: string }
-          | { type: 'file'; mediaType: string; url: string; filename?: string }
-        > = [{ type: 'text', text: args.text }]
-
-        // Always keep file parts on the UI message so the thread can show
-        // thumbnails. Non-vision models get text placeholders later, only for
-        // convertToModelMessages in the orchestrator.
-        for (const file of files) {
-          const url = file.url
-          if (url?.startsWith('file://')) {
-            parts.push({
-              type: 'text',
-              text: `[Attachment unavailable: ${file.filename || url}]`,
-            })
-            continue
-          }
-
-          if (!url) {
-            continue
-          }
-
-          parts.push({
-            type: 'file',
-            mediaType: file.mediaType || 'image/png',
-            url,
-            filename: file.filename,
-          })
-        }
-
-        if (controller.signal.aborted) {
+        const abortedBeforeAppend = await appendSendUserMessage({
+          session,
+          text: args.text,
+          model: args.model,
+          files,
+          mentions,
+          agentNames: agentIndex.map((agent) => agent.name),
+          projectRoot,
+          aborted: () => controller.signal.aborted,
+        })
+        if (abortedBeforeAppend) {
           status.value = 'ready'
           await fleetSidebar.refreshSlug(options.projectSlug)
           return
         }
-
-        const skillNames = (
-          await listSlashSkillIndex(projectRoot).catch(() => [])
-        ).map((skill) => skill.name)
-        const agentNames = agentIndex.map((agent) => agent.name)
-
-        const mentionHighlights = buildMentionHighlights(
-          args.text,
-          mentions,
-          skillNames,
-          agentNames,
-        )
-
-        session.appendLocalMessage({
-          id: crypto.randomUUID(),
-          role: 'user',
-          parts,
-          metadata: {
-            createdAt: new Date().toISOString(),
-            model: args.model,
-            ...(mentionHighlights.length > 0 ? { mentionHighlights } : {}),
-          },
-        })
+        userMessageAppended = true
       }
 
       if (controller.signal.aborted) {
@@ -250,9 +182,46 @@ export default (
         return
       }
 
+      if (
+        deferOverlappingParentTurn({
+          resumeInFlight: resumingBackgroundBatch.value,
+          compacting: compacting.value,
+          enqueue: () =>
+            enqueueComposerSend(messageQueue, {
+              ...args,
+              skipUserMessage: args.skipUserMessage || userMessageAppended,
+              skipUserPersist: args.skipUserPersist || userMessageAppended,
+            }),
+          abortController,
+          controller,
+          previousAbort,
+          status,
+        })
+      ) {
+        await fleetSidebar.refreshSlug(options.projectSlug)
+        return
+      }
+
+      await applyParentTurnStart({
+        state,
+        mode: args.mode,
+        model: args.model,
+        reasoning: args.reasoning,
+        mentions,
+        effectiveSettings: chatSettings,
+      })
+
       const turnId = crypto.randomUUID()
       session.startAgentTurn(turnId)
       turnStarted = true
+      suppressQueueDrainAfterStop.value = false
+      if (
+        !args.internal &&
+        !resumingBackgroundBatch.value &&
+        hasPendingBackgroundResume(options.chatId)
+      ) {
+        flushPendingBackgroundResume(options.chatId)
+      }
 
       await runOrchestrator({
         workspace: options,
@@ -325,7 +294,9 @@ export default (
       await fleetSidebar.refreshSlug(options.projectSlug)
     } finally {
       contextBudgetSync.setDraftMentions([])
-      abortController.value = null
+      if (abortController.value === controller) {
+        abortController.value = null
+      }
     }
   }
 

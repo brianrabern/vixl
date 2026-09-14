@@ -45,6 +45,13 @@ describe('agent-harness helpers isParentBusy', () => {
     expect(attention.isFullyIdle()).toBe(false)
   })
 
+  it('is true while compacting even when chat status is ready', () => {
+    const attention = createHelpers(
+      buildState({ status: 'ready', compacting: true }),
+    )
+    expect(attention.isParentBusy()).toBe(true)
+  })
+
   it('is false when ready and not compacting', () => {
     const attention = createHelpers(buildState())
     expect(attention.isParentBusy()).toBe(false)

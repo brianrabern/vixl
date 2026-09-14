@@ -3,6 +3,20 @@ import type { AgentTurn } from '@/types/chat/agent-turn'
 import type { ChatTimelineItem, SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { ToolRun } from '@/types/harness/tool-run'
 
+const userItem = (
+  id: string,
+  text: string,
+  model?: string,
+): ChatTimelineItem => {
+  const message: UIMessage = {
+    id,
+    role: 'user',
+    parts: [{ type: 'text', text }],
+    metadata: model ? { model } : undefined,
+  }
+  return { type: 'user', message }
+}
+
 const buildTurn = (
   subagent: SubagentTimelineItem,
   turnIndex: number,
@@ -37,17 +51,35 @@ const turnHasContent = (
   turn.steps.some((step) => step.tools.length > 0) ||
   (includeRunning && status === 'running')
 
+const appendSteerMessages = (
+  items: ChatTimelineItem[],
+  subagent: SubagentTimelineItem,
+): void => {
+  const delivered = subagent.steers ?? []
+  const pending = subagent.pendingSteers ?? []
+  const messages = [...delivered, ...pending]
+  for (const [index, text] of messages.entries()) {
+    const trimmed = text.trim()
+    if (!trimmed) {
+      continue
+    }
+    items.push(
+      userItem(`${subagent.subagentId}-steer-${index}`, trimmed, subagent.model),
+    )
+  }
+}
+
 export default (subagent: SubagentTimelineItem): ChatTimelineItem[] => {
   const items: ChatTimelineItem[] = []
 
   if (subagent.prompt?.trim()) {
-    const message: UIMessage = {
-      id: `${subagent.subagentId}-prompt`,
-      role: 'user',
-      parts: [{ type: 'text', text: subagent.prompt.trim() }],
-      metadata: subagent.model ? { model: subagent.model } : undefined,
-    }
-    items.push({ type: 'user', message })
+    items.push(
+      userItem(
+        `${subagent.subagentId}-prompt`,
+        subagent.prompt.trim(),
+        subagent.model,
+      ),
+    )
   }
 
   if (subagent.compactions.length === 0) {
@@ -55,6 +87,7 @@ export default (subagent: SubagentTimelineItem): ChatTimelineItem[] => {
     if (turnHasContent(turn, true, subagent.status)) {
       items.push({ type: 'agent-turn', turn })
     }
+    appendSteerMessages(items, subagent)
     return items
   }
 
@@ -88,5 +121,6 @@ export default (subagent: SubagentTimelineItem): ChatTimelineItem[] => {
     items.push({ type: 'agent-turn', turn: trailing })
   }
 
+  appendSteerMessages(items, subagent)
   return items
 }

@@ -16,6 +16,9 @@ export type SubagentTimelineItem = {
   tools: ToolRun[]
   compacting?: boolean
   compactions: Array<{ summary: string; focus: string | null; toolBoundary: number }>
+  messages?: unknown[]
+  steers?: string[]
+  pendingSteers?: string[]
 }
 
 export type ChatTimelineItem =

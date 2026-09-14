@@ -114,6 +114,28 @@ const createActiveSessionFacade = () => {
     })
   }
 
+  const queueLocalSubagentSteer = (subagentId: string, message: string): void => {
+    withActiveSession(undefined, (_session, api) => {
+      api.queueLocalSubagentSteer(subagentId, message)
+    })
+  }
+
+  const rollbackLocalSubagentSteer = (
+    subagentId: string,
+    message: string,
+    status: SubagentTimelineItem['status'],
+  ): void => {
+    withActiveSession(undefined, (_session, api) => {
+      api.rollbackLocalSubagentSteer(subagentId, message, status)
+    })
+  }
+
+  const clearLocalQueuedSubagentSteers = (subagentId: string): void => {
+    withActiveSession(undefined, (_session, api) => {
+      api.clearLocalQueuedSubagentSteers(subagentId)
+    })
+  }
+
   const setLocalSubagentPrompt = (subagentId: string, prompt: string): void => {
     withActiveSession(undefined, (_session, api) => {
       api.setLocalSubagentPrompt(subagentId, prompt)
@@ -250,6 +272,9 @@ const createActiveSessionFacade = () => {
     appendLocalTodoUpdate,
     upsertLocalSubagentStart,
     appendLocalSubagentToolEvent,
+    queueLocalSubagentSteer,
+    rollbackLocalSubagentSteer,
+    clearLocalQueuedSubagentSteers,
     setLocalSubagentPrompt,
     completeLocalSubagent,
     getSubagent,

@@ -65,6 +65,7 @@ export type AgentHarnessState = {
   sessionAllows: Set<string>
   sessionDenies: Set<string>
   disposed: Ref<boolean>
+  suppressQueueDrainAfterStop: Ref<boolean>
 }
 
 export type AttentionHelpers = {

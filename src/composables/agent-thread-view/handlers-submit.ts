@@ -17,6 +17,23 @@ export const createSubmitHandlers = (state: AgentThreadViewState) => {
     mentions?: ContextMention[]
   }): Promise<void> => {
     if (state.isSubagentView.value) {
+      const subagentId = state.subagentId.value
+      if (!subagentId) {
+        return
+      }
+      if (!state.harness.value) {
+        toast.error('Chat is not ready yet', {
+          description: 'Wait for the chat to finish loading.',
+        })
+        return
+      }
+      try {
+        await state.harness.value.steerSubagent(subagentId, payload.text)
+      } catch (error) {
+        toast.error('Failed to steer subagent', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
       return
     }
     if (!payload.model) {
@@ -144,6 +161,17 @@ export const createSubmitHandlers = (state: AgentThreadViewState) => {
 
   const handleStop = async (): Promise<void> => {
     if (state.isSubagentView.value) {
+      const subagentId = state.subagentId.value
+      if (!subagentId) {
+        return
+      }
+      try {
+        state.harness.value?.stopSubagent(subagentId)
+      } catch (error) {
+        toast.error('Failed to stop subagent', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
       return
     }
     try {
