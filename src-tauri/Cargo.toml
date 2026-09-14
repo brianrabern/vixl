@@ -25,6 +25,7 @@ tauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon", "ima
 tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
 tauri-plugin-mcp-bridge = "0.12"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"

@@ -1,9 +1,11 @@
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
+import { listen } from '@tauri-apps/api/event'
 import useFleetRegistry from '@/composables/use-fleet-registry'
 import useChatStore from '@/composables/use-chat-store'
 import type { FleetSidebarProject } from '@/types/fleet/fleet-sidebar-project'
 import type { ChatMeta } from '@/types/chat/chat-meta'
-import { listPinnedChats } from '@/services/vixl/vixl-tauri'
+import { isTauri, listPinnedChats } from '@/services/vixl/vixl-tauri'
 import type { FleetPinnedChat } from '@/types/fleet/fleet-pinned-chat'
 import { HOME_CHAT_SLUG } from '@/constants/home-chat'
 
@@ -27,6 +29,7 @@ export type FleetSidebarActivityItem =
 
 const pinnedChats = ref<FleetPinnedChat[]>([])
 const chatsBySlug = ref<Record<string, ChatMeta[]>>({})
+let projectOpenedListenerRegistered = false
 
 export const chatTitleForId = (chatId: string): string | null => {
   for (const chats of Object.values(chatsBySlug.value)) {
@@ -142,6 +145,28 @@ export default () => {
     await refreshChats()
     await refreshPinned()
   }
+
+  onMounted(() => {
+    if (!isTauri() || projectOpenedListenerRegistered) {
+      return
+    }
+    projectOpenedListenerRegistered = true
+    listen('vixl-project-opened', async () => {
+      try {
+        await fleet.refresh()
+        await refreshAll()
+      } catch (error) {
+        toast.error('Failed to refresh project list', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    }).catch((error: unknown) => {
+      projectOpenedListenerRegistered = false
+      toast.error('Failed to listen for opened projects', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    })
+  })
 
   return {
     sidebarProjects,

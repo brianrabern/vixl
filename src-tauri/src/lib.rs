@@ -1,7 +1,10 @@
 pub mod commands;
 pub mod db;
+mod launch;
 mod tray;
 mod vibrancy;
+
+pub use launch::parse_launch_path_arg;
 
 use tauri::Manager;
 
@@ -41,6 +44,9 @@ pub fn run() {
 
 pub fn run_with_launch_path(launch_path: Option<String>) {
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            launch::handle_second_instance(app, args)
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
