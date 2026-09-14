@@ -42,8 +42,16 @@ const buildState = (): AgentHarnessState =>
       rollbackLocalSubagentSteer: vi.fn<
         (id: string, message: string, status: string) => void
       >(),
-      getSubagent: vi.fn<(id: string) => { status: 'done' } | null>(() => ({
+      getSubagent: vi.fn<
+        (id: string) => {
+          status: 'done'
+          name: string
+          blocking: boolean
+        } | null
+      >(() => ({
         status: 'done',
+        name: 'explorer',
+        blocking: false,
       })),
     },
     lastRunConfig: ref(null),
@@ -169,5 +177,46 @@ describe('agent-harness steerSubagent', () => {
     expect(state.session.rollbackLocalSubagentSteer).not.toHaveBeenCalled()
     expect(state.subagents.value[0]?.status).toBe('error')
     expect(state.subagents.value[0]?.summary).toBe('generate failed')
+  })
+
+  it('re-adds a missing subagent as running when steered', async () => {
+    const state = buildState()
+    state.subagents.value = []
+    const { steerSubagent } = createSteer(state, {
+      handleEvent: vi.fn<(event: unknown) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>(),
+    })
+
+    await steerSubagent('sub-1', 'keep going')
+
+    expect(state.subagents.value).toEqual([
+      {
+        subagentId: 'sub-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+    ])
+    expect(state.session.rollbackLocalSubagentSteer).not.toHaveBeenCalled()
+  })
+
+  it('removes an inserted subagent entry when steer delivery fails', async () => {
+    deliverSteer.mockResolvedValue({ error: 'Unknown subagentId: sub-1' })
+    const state = buildState()
+    state.subagents.value = []
+    const { steerSubagent } = createSteer(state, {
+      handleEvent: vi.fn<(event: unknown) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>(),
+    })
+
+    await steerSubagent('sub-1', 'retry')
+
+    expect(state.session.rollbackLocalSubagentSteer).toHaveBeenCalledWith(
+      'sub-1',
+      'retry',
+      'done',
+    )
+    expect(state.subagents.value).toEqual([])
   })
 })

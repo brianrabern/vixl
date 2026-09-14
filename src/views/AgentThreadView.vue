@@ -8,7 +8,11 @@ import RunningTerminalsPanel from '@/components/chat/RunningTerminalsPanel.vue'
 import ChatContextUsageBar from '@/components/chat/ContextUsageBar.vue'
 import ChatCodegraphStatusChip from '@/components/chat/ChatCodegraphStatusChip.vue'
 import ChatChatPanelContextMenu from '@/components/chat/ChatPanelContextMenu.vue'
+import ChatPendingApprovals from '@/components/chat/ChatPendingApprovals.vue'
+import ChatSubagentStack from '@/components/chat/ChatSubagentStack.vue'
+import ChatStackPillBar from '@/components/chat/ChatStackPillBar.vue'
 import useAgentThreadView from '@/composables/agent-thread-view'
+import type { ChatStackId } from '@/types/chat/chat-stack-id'
 
 const {
   workbench,
@@ -25,6 +29,7 @@ const {
   harnessPendingMcpAuth,
   queuedMessages,
   isWaitingOnBackground,
+  runningSubagents,
   chatPromptInputRef,
   pendingQuestion,
   compacting,
@@ -43,6 +48,7 @@ const {
   handleRestoreFiles,
   handleStop,
   handleStopSubagent,
+  handleOpenSubagent,
   handleQueueForce,
   handleQueueRemove,
   handleQueueEdit,
@@ -57,6 +63,44 @@ const {
   handleRetry,
   handlePermissionLevelChange,
 } = useAgentThreadView()
+
+const { visiblePills, openStack, toggleStack } = useChatStackPills({
+  subagents: computed(() => runningSubagents.value.length),
+  approvals: computed(() => harnessPendingApprovals.value.length),
+  terminals: computed(() => runningShells.value.length),
+  queue: computed(() => queuedMessages.value.length),
+  todos: computed(() => todos.value.length),
+  resetKey: threadKey,
+})
+
+const pills = computed(() => {
+  const counts: Record<ChatStackId, number> = {
+    subagents: runningSubagents.value.length,
+    approvals: harnessPendingApprovals.value.length,
+    terminals: runningShells.value.length,
+    queue: queuedMessages.value.length,
+    todos: todos.value.length,
+  }
+  const todosCompleted = todos.value.filter(
+    (todo) => todo.status === 'completed',
+  ).length
+  return visiblePills.value.map((id) => {
+    const n = counts[id]
+    if (id === 'subagents') {
+      return { id, label: n === 1 ? '1 agent' : `${n} agents` }
+    }
+    if (id === 'approvals') {
+      return { id, label: n === 1 ? '1 approval' : `${n} approvals` }
+    }
+    if (id === 'terminals') {
+      return { id, label: n === 1 ? '1 terminal' : `${n} terminals` }
+    }
+    if (id === 'queue') {
+      return { id, label: `${n} queued` }
+    }
+    return { id, label: `Tasks ${todosCompleted}/${n}` }
+  })
+})
 </script>
 
 <template>
@@ -115,29 +159,44 @@ const {
     >
       <div class="mx-auto flex w-full max-w-3xl flex-col">
         <template v-if="!isSubagentView">
-          <ChatPendingApprovals
-            v-if="harnessPendingApprovals.length > 0"
-            :approvals="harnessPendingApprovals"
+          <div
+            v-if="openStack"
+            class="mb-2 w-full rounded-lg border border-border/50 bg-card p-2"
+          >
+            <ChatPendingApprovals
+              v-if="openStack === 'approvals'"
+              :approvals="harnessPendingApprovals"
+              @resolve="handleResolveApproval"
+            />
+            <ChatTodoTimeline
+              v-else-if="openStack === 'todos'"
+              :todos="todos"
+            />
+            <RunningTerminalsPanel
+              v-else-if="openStack === 'terminals'"
+              :shells="runningShells"
+              @open-shell="handleOpenShell"
+              @stop-shell="handleKillShell"
+            />
+            <ChatMessageQueue
+              v-else-if="openStack === 'queue'"
+              :items="queuedMessages"
+              @edit="handleQueueEdit"
+              @force="handleQueueForce"
+              @remove="handleQueueRemove"
+            />
+            <ChatSubagentStack
+              v-else-if="openStack === 'subagents'"
+              :subagents="runningSubagents"
+              @open="handleOpenSubagent"
+              @stop="handleStopSubagent"
+            />
+          </div>
+          <ChatStackPillBar
+            :pills="pills"
+            :open-stack="openStack"
             class="mb-2 w-full"
-            @resolve="handleResolveApproval"
-          />
-          <ChatTodoTimeline
-            v-if="todos.length > 0"
-            :todos="todos"
-            class="mb-2 w-full"
-          />
-          <RunningTerminalsPanel
-            :shells="runningShells"
-            @open-shell="handleOpenShell"
-            @stop-shell="handleKillShell"
-          />
-          <ChatMessageQueue
-            v-if="queuedMessages.length > 0"
-            :items="queuedMessages"
-            class="mb-2 w-full"
-            @edit="handleQueueEdit"
-            @force="handleQueueForce"
-            @remove="handleQueueRemove"
+            @toggle="toggleStack"
           />
         </template>
         <ChatPromptInput

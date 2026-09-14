@@ -115,6 +115,10 @@ export default () => {
     const subagents = unref(harness.value?.subagents) ?? []
     return subagents.length >= 0 && (harness.value?.isWaitingOnBackground() ?? false)
   })
+  const runningSubagents = computed(() => {
+    const subagents = unref(harness.value?.subagents) ?? []
+    return subagents.filter((subagent) => subagent.status === 'running')
+  })
   const chatPromptInputRef = ref<{
     hydrateQueuedMessage: (item: QueuedChatMessage) => Promise<void>
   } | null>(null)
@@ -207,6 +211,7 @@ export default () => {
     harnessPendingMcpAuth,
     queuedMessages,
     isWaitingOnBackground,
+    runningSubagents,
     chatPromptInputRef,
     pendingQuestion,
     compacting,

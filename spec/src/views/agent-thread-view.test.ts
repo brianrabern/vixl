@@ -51,6 +51,7 @@ vi.mock('@/composables/agent-thread-view', () => ({
     harnessPendingMcpAuth: computed(() => []),
     queuedMessages: computed(() => []),
     isWaitingOnBackground: computed(() => false),
+    runningSubagents: computed(() => []),
     chatPromptInputRef: ref(null),
     pendingQuestion: computed(() => ({
       toolCallId: 'q-1',
@@ -73,6 +74,7 @@ vi.mock('@/composables/agent-thread-view', () => ({
     handleRestoreFiles: vi.fn<(...args: unknown[]) => Promise<void>>(),
     handleStop: vi.fn<(...args: unknown[]) => Promise<void>>(),
     handleStopSubagent: vi.fn<(id: string) => void>(),
+    handleOpenSubagent: vi.fn<(id: string) => Promise<void>>(),
     handleQueueForce: vi.fn<(...args: unknown[]) => Promise<void>>(),
     handleQueueRemove: vi.fn<(id: string) => void>(),
     handleQueueEdit: vi.fn<(id: string) => Promise<void>>(),
@@ -134,6 +136,7 @@ describe('AgentThreadView subagent composer', () => {
     expect(wrapper.findComponent({ name: 'ChatPendingApprovals' }).exists()).toBe(
       true,
     )
+    expect(wrapper.findComponent({ name: 'ChatStackPillBar' }).exists()).toBe(true)
     wrapper.unmount()
   })
 })

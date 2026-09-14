@@ -12,7 +12,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-border/50 bg-card p-2">
+  <div class="max-h-72 space-y-2 overflow-y-auto">
     <ChatToolCard
       v-for="approval in approvals"
       :key="approval.toolCallId"

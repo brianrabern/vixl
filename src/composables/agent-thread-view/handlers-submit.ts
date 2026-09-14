@@ -1,10 +1,12 @@
 import { toast } from 'vue-sonner'
-import type { PermissionLevel } from '@/types/harness/permission'
-import type { VixlChatMode } from '@/types/vixl/vixl-settings'
-import type { ReasoningLevel } from '@/types/models/reasoning-level'
+import type { FileUIPart } from 'ai'
+import { HOME_CHAT_SLUG, isHomeChatSlug } from '@/constants/home-chat'
 import type { ContextMention } from '@/types/harness/context-mention'
 import type { FileCheckpointFilePolicy } from '@/types/harness/file-checkpoint'
-import type { FileUIPart } from 'ai'
+import type { PermissionLevel } from '@/types/harness/permission'
+import type { ReasoningLevel } from '@/types/models/reasoning-level'
+import type { VixlChatMode } from '@/types/vixl/vixl-settings'
+import chatRouteFor from '@/utils/chat-route-for'
 import type { AgentThreadViewState } from './types'
 
 export const createSubmitHandlers = (state: AgentThreadViewState) => {
@@ -187,6 +189,28 @@ export const createSubmitHandlers = (state: AgentThreadViewState) => {
     state.harness.value?.stopSubagent(subagentId)
   }
 
+  const handleOpenSubagent = async (subagentId: string): Promise<void> => {
+    const chatId = String(state.route.params.chatId ?? '')
+    if (!chatId) {
+      toast.error('Chat not found')
+      return
+    }
+    const isStandalone =
+      state.route.name === 'home-chat' ||
+      state.route.name === 'home-chat-subagent' ||
+      isHomeChatSlug(String(state.route.params.slug ?? ''))
+    const projectSlug = isStandalone
+      ? HOME_CHAT_SLUG
+      : String(state.route.params.slug ?? '')
+    try {
+      await state.router.push(chatRouteFor(projectSlug, chatId, subagentId))
+    } catch (error) {
+      toast.error('Failed to open sub agent', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }
+
   const handleRetry = async (): Promise<void> => {
     if (state.isSubagentView.value) {
       return
@@ -267,6 +291,7 @@ export const createSubmitHandlers = (state: AgentThreadViewState) => {
     handleRestoreFiles,
     handleStop,
     handleStopSubagent,
+    handleOpenSubagent,
     handleRetry,
     handlePermissionLevelChange,
     handleCompact,

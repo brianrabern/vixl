@@ -1,5 +1,6 @@
 import { toast } from 'vue-sonner'
 import deliverSteer from '@/services/harness/subagent/deliver-steer'
+import { getSubagent } from '@/services/harness/subagent/registry'
 import { loadEffectiveSettings } from '@/services/config/vixl-config'
 import isSteerDeliveryStarted from '@/utils/is-steer-delivery-started'
 import type { HarnessEvent } from '@/types/harness/harness-event'
@@ -80,16 +81,32 @@ export default (state: AgentHarnessState, deps: SteerDeps) => {
       return
     }
 
-    const previousHarnessStatus = state.subagents.value.find(
+    const existing = state.subagents.value.find(
       (item) => item.subagentId === subagentId,
-    )?.status
+    )
+    const previousHarnessStatus = existing?.status
+    const timeline = state.session.getSubagent(subagentId)
     const previousTimelineStatus =
-      state.session.getSubagent(subagentId)?.status ?? previousHarnessStatus ?? 'done'
+      timeline?.status ?? previousHarnessStatus ?? 'done'
 
     state.session.queueLocalSubagentSteer(subagentId, message)
-    state.subagents.value = state.subagents.value.map((item) =>
-      item.subagentId === subagentId ? { ...item, status: 'running' } : item,
-    )
+    if (existing) {
+      state.subagents.value = state.subagents.value.map((item) =>
+        item.subagentId === subagentId ? { ...item, status: 'running' } : item,
+      )
+    } else {
+      const registryRecord = getSubagent(subagentId)
+      state.subagents.value = [
+        ...state.subagents.value,
+        {
+          subagentId,
+          name: timeline?.name ?? registryRecord?.agentName ?? subagentId,
+          blocking: timeline?.blocking ?? true,
+          status: 'running',
+          events: [],
+        },
+      ]
+    }
 
     const rollbackSteer = (): void => {
       state.session.rollbackLocalSubagentSteer(
@@ -97,6 +114,12 @@ export default (state: AgentHarnessState, deps: SteerDeps) => {
         message,
         previousTimelineStatus,
       )
+      if (!existing) {
+        state.subagents.value = state.subagents.value.filter(
+          (item) => item.subagentId !== subagentId,
+        )
+        return
+      }
       if (!previousHarnessStatus) {
         return
       }
