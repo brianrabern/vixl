@@ -17,8 +17,7 @@ const deliverSteer = async (
   subagentId: string,
   message: string,
 ): Promise<
-  | { subagentId: string; status: 'running'; note: string }
-  | { subagentId: string; name: string; summary: string }
+  | { subagentId: string; name: string; status: 'running'; note: string }
   | { error: string }
 > => {
   assertNotAwaitingPlanGo(ctx.projectSlug, ctx.chatId)
@@ -38,6 +37,7 @@ const deliverSteer = async (
     pushSteer(subagentId, message)
     return {
       subagentId,
+      name: record.agentName,
       status: 'running',
       note: 'Steer will be delivered at the next step boundary.',
     }

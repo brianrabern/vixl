@@ -2,7 +2,6 @@ import { toast } from 'vue-sonner'
 import deliverSteer from '@/services/harness/subagent/deliver-steer'
 import { getSubagent } from '@/services/harness/subagent/registry'
 import { loadEffectiveSettings } from '@/services/config/vixl-config'
-import isSteerDeliveryStarted from '@/utils/is-steer-delivery-started'
 import type { HarnessEvent } from '@/types/harness/harness-event'
 import type { PermissionCapabilityKey } from '@/types/harness/permission'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
@@ -139,9 +138,7 @@ export default (state: AgentHarnessState, deps: SteerDeps) => {
         })
       }
     } catch (error) {
-      if (!isSteerDeliveryStarted(error)) {
-        rollbackSteer()
-      }
+      rollbackSteer()
       toast.error('Failed to steer subagent', {
         description: error instanceof Error ? error.message : 'Unknown error',
       })

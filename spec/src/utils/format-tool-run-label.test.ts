@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { register, resetSubagentRegistryForTests } from '@/services/harness/subagent/registry'
 import formatToolRunLabel from '@/utils/format-tool-run-label'
 import humanizeToolName from '@/utils/humanize-tool-name'
 import type { ToolRun } from '@/types/harness/tool-run'
@@ -179,7 +180,63 @@ describe('formatToolRunLabel call_mcp_tool', () => {
       ),
     ).toBe('generalPurpose')
   })
+})
 
+describe('formatToolRunLabel steer_subagent', () => {
+  afterEach(() => {
+    resetSubagentRegistryForTests()
+  })
+
+  it('labels a running steer from the registered agent name', () => {
+    register('chat-1', 'sub-1', new AbortController(), {
+      toolCallId: 'tc-1',
+      agentName: 'generalPurpose',
+    })
+
+    expect(
+      formatToolRunLabel(
+        toolRun({
+          name: 'steer_subagent',
+          status: 'running',
+          args: { subagentId: 'sub-1', message: 'Rework the auth helpers' },
+        }),
+      ),
+    ).toBe('Steering generalPurpose')
+  })
+
+  it('labels a done steer from result.name', () => {
+    expect(
+      formatToolRunLabel(
+        toolRun({
+          name: 'steer_subagent',
+          result: { subagentId: 'sub-1', name: 'generalPurpose', summary: 'Steered' },
+        }),
+      ),
+    ).toBe('Steered generalPurpose')
+  })
+
+  it('falls back to Sub-agent when the id and result name are unknown', () => {
+    expect(
+      formatToolRunLabel(
+        toolRun({
+          name: 'steer_subagent',
+          status: 'running',
+          args: { subagentId: 'missing-sub', message: 'Rework the auth helpers' },
+        }),
+      ),
+    ).toBe('Steering Sub-agent')
+    expect(
+      formatToolRunLabel(
+        toolRun({
+          name: 'steer_subagent',
+          args: { subagentId: 'missing-sub', message: 'Rework the auth helpers' },
+        }),
+      ),
+    ).toBe('Steered Sub-agent')
+  })
+})
+
+describe('formatToolRunLabel fallback', () => {
   it('title-cases unmapped tool names in the fallback', () => {
     expect(
       formatToolRunLabel(

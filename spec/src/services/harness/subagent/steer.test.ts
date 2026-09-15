@@ -6,7 +6,12 @@ const assertNotAwaitingPlanGo = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => void>(),
 )
 const resumeSubagent = vi.hoisted(() =>
-  vi.fn<(...args: unknown[]) => Promise<{ subagentId: string; name: string; summary: string }>>(),
+  vi.fn<(...args: unknown[]) => Promise<{
+    subagentId: string
+    name: string
+    status: 'running'
+    note: string
+  }>>(),
 )
 
 vi.mock('@/services/harness/plan-execution-session', () => ({
@@ -66,7 +71,8 @@ describe('steer_subagent routing', () => {
     resumeSubagent.mockResolvedValue({
       subagentId: 'sub-1',
       name: 'explorer',
-      summary: 'resumed summary',
+      status: 'running',
+      note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
     })
   })
 
@@ -78,6 +84,7 @@ describe('steer_subagent routing', () => {
 
     await expect(execute(baseCtx(), 'sub-1', 'look at auth')).resolves.toEqual({
       subagentId: 'sub-1',
+      name: 'explorer',
       status: 'running',
       note: 'Steer will be delivered at the next step boundary.',
     })
@@ -99,7 +106,8 @@ describe('steer_subagent routing', () => {
     await expect(execute(baseCtx(), 'sub-1', 'keep going')).resolves.toEqual({
       subagentId: 'sub-1',
       name: 'explorer',
-      summary: 'resumed summary',
+      status: 'running',
+      note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
     })
     expect(resumeSubagent).toHaveBeenCalledWith(
       expect.objectContaining({ chatId: 'chat-1' }),
@@ -119,7 +127,8 @@ describe('steer_subagent routing', () => {
     await expect(execute(baseCtx(), 'sub-1', 'try again')).resolves.toEqual({
       subagentId: 'sub-1',
       name: 'explorer',
-      summary: 'resumed summary',
+      status: 'running',
+      note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
     })
     expect(resumeSubagent).toHaveBeenCalled()
   })

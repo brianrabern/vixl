@@ -1,4 +1,5 @@
 import type { ToolRun } from '@/types/harness/tool-run'
+import { getSubagent } from '@/services/harness/subagent/registry'
 import { clipTerminalLabel } from '@/utils/clip-terminal-label'
 import filePathBasename from '@/utils/file-path-basename'
 import humanizeToolName from '@/utils/humanize-tool-name'
@@ -40,7 +41,6 @@ const TOOL_LABELS_DONE: Record<string, string> = {
   diagnostics: 'Read diagnostics',
   web_fetch: 'Fetched',
   resolve_models: 'Looked up models',
-  steer_subagent: 'Steered sub-agent',
 }
 
 const TOOL_LABELS_RUNNING: Record<string, string> = {
@@ -77,7 +77,6 @@ const TOOL_LABELS_RUNNING: Record<string, string> = {
   diagnostics: 'Reading diagnostics',
   web_fetch: 'Fetching',
   resolve_models: 'Looking up models',
-  steer_subagent: 'Steering sub-agent',
 }
 
 const formatPathHint = (path: string, toolName: string): string =>
@@ -150,6 +149,22 @@ const formatSpawnSubagentLabel = (run: ToolRun): string => {
   return name
 }
 
+const formatSteerSubagentLabel = (run: ToolRun): string => {
+  const args = asRecord(run.args)
+  const result = asRecord(run.result)
+  const resultName = typeof result?.name === 'string' ? result.name.trim() : ''
+  const subagentId = typeof args?.subagentId === 'string' ? args.subagentId : ''
+  const registryName = subagentId ? (getSubagent(subagentId)?.agentName.trim() ?? '') : ''
+  const name = resultName || registryName || 'Sub-agent'
+  if (run.status === 'running') {
+    return `Steering ${name}`
+  }
+  if (run.status === 'rejected') {
+    return `Steered ${name} (rejected)`
+  }
+  return `Steered ${name}`
+}
+
 const mcpToolName = (args: unknown): string | null => {
   const record = asRecord(args)
   const tool = record?.tool
@@ -190,6 +205,10 @@ const formatTerminalRunLabel = (run: ToolRun, isRunning: boolean): string => {
 export default (run: ToolRun, options?: { omitPathHint?: boolean }): string => {
   if (run.name === 'spawn_subagent') {
     return formatSpawnSubagentLabel(run)
+  }
+
+  if (run.name === 'steer_subagent') {
+    return formatSteerSubagentLabel(run)
   }
 
   if (run.name === 'call_mcp_tool') {

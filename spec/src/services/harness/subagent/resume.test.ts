@@ -38,6 +38,16 @@ import {
   setMessages,
 } from '@/services/harness/subagent/registry'
 
+const resumeNote =
+  'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.'
+
+const runningReturn = {
+  subagentId: 'sub-1',
+  name: 'explorer',
+  status: 'running' as const,
+  note: resumeNote,
+}
+
 const baseCtx = (): HarnessToolContext => ({
   projectRoot: '/tmp/project',
   projectSlug: 'project',
@@ -53,6 +63,24 @@ const baseCtx = (): HarnessToolContext => ({
   onHarnessEvent: () => {},
 })
 
+const seedCompleted = (messages?: ModelMessage[]): void => {
+  register('chat-1', 'sub-1', new AbortController(), {
+    toolCallId: 'tc-1',
+    agentName: 'explorer',
+    prompt: 'first task',
+    model: 'local::qwen',
+    capabilities: 'read-only',
+  })
+  if (messages) {
+    setMessages('sub-1', messages)
+  }
+  resolve('sub-1', {
+    subagentId: 'sub-1',
+    name: 'explorer',
+    summary: 'first summary',
+  })
+}
+
 describe('resumeSubagent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -60,24 +88,20 @@ describe('resumeSubagent', () => {
     runSubagentGenerate.mockResolvedValue('second summary')
   })
 
-  it('moves completed to running, appends the user message, and reruns generate', async () => {
-    register('chat-1', 'sub-1', new AbortController(), {
-      toolCallId: 'tc-1',
-      agentName: 'explorer',
-      prompt: 'first task',
-      model: 'local::qwen',
-      capabilities: 'read-only',
-    })
+  it('returns running immediately, then completes generate in the background', async () => {
     const history: ModelMessage[] = [
       { role: 'user', content: 'first task' },
       { role: 'assistant', content: 'first summary' },
     ]
-    setMessages('sub-1', history)
-    resolve('sub-1', {
-      subagentId: 'sub-1',
-      name: 'explorer',
-      summary: 'first summary',
-    })
+    seedCompleted(history)
+
+    let releaseGenerate: ((value: string) => void) | undefined
+    runSubagentGenerate.mockImplementation(
+      () =>
+        new Promise((resolveGenerate) => {
+          releaseGenerate = resolveGenerate
+        }),
+    )
 
     const events: unknown[] = []
     const ctx = {
@@ -87,20 +111,16 @@ describe('resumeSubagent', () => {
       },
     }
 
-    await expect(resumeSubagent(ctx, 'sub-1', 'keep going')).resolves.toEqual({
-      subagentId: 'sub-1',
-      name: 'explorer',
-      summary: 'second summary',
-    })
+    await expect(resumeSubagent(ctx, 'sub-1', 'keep going')).resolves.toEqual(
+      runningReturn,
+    )
 
-    expect(getSubagent('sub-1')?.status).toBe('completed')
+    expect(getSubagent('sub-1')?.status).toBe('running')
+    expect(emitSubagentResult).not.toHaveBeenCalled()
     expect(runSubagentGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
         subagentId: 'sub-1',
-        messages: [
-          ...history,
-          { role: 'user', content: 'keep going' },
-        ],
+        messages: [...history, { role: 'user', content: 'keep going' }],
         model: 'local::qwen',
       }),
     )
@@ -111,43 +131,42 @@ describe('resumeSubagent', () => {
         event: { type: 'subagent-steer', message: 'keep going' },
       }),
     ])
+    expect(events.some((event) =>
+      typeof event === 'object'
+      && event !== null
+      && 'type' in event
+      && event.type === 'pending-subagent',
+    )).toBe(false)
+
+    releaseGenerate?.('second summary')
+
+    await vi.waitFor(() => {
+      expect(getSubagent('sub-1')?.status).toBe('completed')
+    })
     expect(emitSubagentResult).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
         subagentId: 'sub-1',
         summary: 'second summary',
+        blocking: false,
         outcome: 'completed',
       }),
     )
+    expect(emitSubagentResult).toHaveBeenCalledTimes(1)
   })
 
   it('continues resume from compacted history stored on the record', async () => {
-    register('chat-1', 'sub-1', new AbortController(), {
-      toolCallId: 'tc-1',
-      agentName: 'explorer',
-      prompt: 'first task',
-      model: 'local::qwen',
-      capabilities: 'read-only',
-    })
     const compacted: ModelMessage[] = [
       { role: 'user', content: 'compacted checkpoint' },
     ]
-    setMessages('sub-1', compacted)
-    resolve('sub-1', {
-      subagentId: 'sub-1',
-      name: 'explorer',
-      summary: 'first summary',
-    })
+    seedCompleted(compacted)
 
     await resumeSubagent(baseCtx(), 'sub-1', 'keep going')
 
     expect(runSubagentGenerate).toHaveBeenCalledWith(
       expect.objectContaining({
         subagentId: 'sub-1',
-        messages: [
-          ...compacted,
-          { role: 'user', content: 'keep going' },
-        ],
+        messages: [...compacted, { role: 'user', content: 'keep going' }],
       }),
     )
   })
@@ -159,74 +178,98 @@ describe('resumeSubagent', () => {
       model: 'local::qwen',
     })
 
-    const error = await resumeSubagent(baseCtx(), 'sub-1', 'nope').catch(
-      (caught: unknown) => caught,
+    await expect(resumeSubagent(baseCtx(), 'sub-1', 'nope')).rejects.toThrow(
+      'Subagent cannot be resumed: sub-1',
     )
-    expect(error).toEqual(expect.objectContaining({
-      message: 'Subagent cannot be resumed: sub-1',
-    }))
-    expect(error).not.toEqual(expect.objectContaining({
-      steerDeliveryStarted: true,
-    }))
     expect(runSubagentGenerate).not.toHaveBeenCalled()
   })
 
-  it('marks delivery started when generate fails after reopen', async () => {
+  it('throws when the subagent is unknown', async () => {
+    await expect(
+      resumeSubagent(baseCtx(), 'missing', 'keep going'),
+    ).rejects.toThrow('Subagent not found: missing')
+    expect(runSubagentGenerate).not.toHaveBeenCalled()
+  })
+
+  it('throws when the subagent has no stored model', async () => {
     register('chat-1', 'sub-1', new AbortController(), {
       toolCallId: 'tc-1',
       agentName: 'explorer',
-      model: 'local::qwen',
     })
     resolve('sub-1', {
       subagentId: 'sub-1',
       name: 'explorer',
       summary: 'first summary',
     })
-    runSubagentGenerate.mockRejectedValue(new Error('generate failed'))
+
+    await expect(
+      resumeSubagent(baseCtx(), 'sub-1', 'keep going'),
+    ).rejects.toThrow('Subagent has no stored model: sub-1')
+    expect(runSubagentGenerate).not.toHaveBeenCalled()
+    expect(getSubagent('sub-1')?.status).toBe('completed')
+  })
+
+  it('does not throw after delivery starts when generate fails', async () => {
+    seedCompleted()
+
+    let rejectGenerate: ((reason: Error) => void) | undefined
+    runSubagentGenerate.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          rejectGenerate = reject
+        }),
+    )
 
     const ctx = baseCtx()
-    const error = await resumeSubagent(ctx, 'sub-1', 'keep going').catch(
-      (caught: unknown) => caught,
+    await expect(resumeSubagent(ctx, 'sub-1', 'keep going')).resolves.toEqual(
+      runningReturn,
     )
+    expect(finishSubagentWithError).not.toHaveBeenCalled()
 
-    expect(error).toEqual(expect.objectContaining({
-      message: 'generate failed',
-      steerDeliveryStarted: true,
-    }))
-    expect(finishSubagentWithError).toHaveBeenCalledWith(
-      ctx,
-      expect.objectContaining({
-        subagentId: 'sub-1',
-        blocking: true,
-      }),
-    )
+    rejectGenerate?.(new Error('generate failed'))
+
+    await vi.waitFor(() => {
+      expect(finishSubagentWithError).toHaveBeenCalledWith(
+        ctx,
+        expect.objectContaining({
+          subagentId: 'sub-1',
+          blocking: false,
+        }),
+      )
+    })
+    expect(finishSubagentWithError).toHaveBeenCalledTimes(1)
+    expect(emitSubagentResult).not.toHaveBeenCalled()
   })
 
   it('makes the steered summary deliverable after a prior parent flush', async () => {
-    register('chat-1', 'sub-1', new AbortController(), {
-      toolCallId: 'tc-1',
-      agentName: 'explorer',
-      model: 'local::qwen',
-    })
-    resolve('sub-1', {
-      subagentId: 'sub-1',
-      name: 'explorer',
-      summary: 'first summary',
-    })
+    seedCompleted()
     markBackgroundResultsDelivered('chat-1', ['tc-1'])
     expect(listDeliverableBackgroundResults('chat-1')).toEqual([])
 
-    await resumeSubagent(baseCtx(), 'sub-1', 'keep going')
+    let releaseGenerate: ((value: string) => void) | undefined
+    runSubagentGenerate.mockImplementation(
+      () =>
+        new Promise((resolveGenerate) => {
+          releaseGenerate = resolveGenerate
+        }),
+    )
 
-    expect(listDeliverableBackgroundResults('chat-1')).toEqual([
-      {
-        toolCallId: 'tc-1',
-        result: {
-          subagentId: 'sub-1',
-          name: 'explorer',
-          summary: 'second summary',
+    await resumeSubagent(baseCtx(), 'sub-1', 'keep going')
+    expect(listDeliverableBackgroundResults('chat-1')).toEqual([])
+
+    releaseGenerate?.('second summary')
+
+    await vi.waitFor(() => {
+      expect(listDeliverableBackgroundResults('chat-1')).toEqual([
+        {
+          toolCallId: 'tc-1',
+          result: {
+            subagentId: 'sub-1',
+            name: 'explorer',
+            summary: 'second summary',
+          },
         },
-      },
-    ])
+      ])
+    })
   })
 })

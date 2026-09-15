@@ -131,36 +131,9 @@ describe('agent-harness steerSubagent', () => {
     expect(state.subagents.value[0]?.status).toBe('done')
   })
 
-  it('rolls back pending steer when deliverSteer throws before delivery starts', async () => {
+  it('rolls back pending steer and toasts when deliverSteer throws', async () => {
     deliverSteer.mockRejectedValue(new Error('Subagent aborted'))
     const state = buildState()
-    const { steerSubagent } = createSteer(state, {
-      handleEvent: vi.fn<(event: unknown) => void>(),
-      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>(),
-    })
-
-    await steerSubagent('sub-1', 'retry')
-
-    expect(state.session.rollbackLocalSubagentSteer).toHaveBeenCalledWith(
-      'sub-1',
-      'retry',
-      'done',
-    )
-    expect(state.subagents.value[0]?.status).toBe('done')
-  })
-
-  it('keeps the failed outcome when resume fails after delivery started', async () => {
-    const state = buildState()
-    deliverSteer.mockImplementation(async () => {
-      state.subagents.value = state.subagents.value.map((item) =>
-        item.subagentId === 'sub-1'
-          ? { ...item, status: 'error', summary: 'generate failed' }
-          : item,
-      )
-      throw Object.assign(new Error('generate failed'), {
-        steerDeliveryStarted: true,
-      })
-    })
     const { steerSubagent } = createSteer(state, {
       handleEvent: vi.fn<(event: unknown) => void>(),
       persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>(),
@@ -171,12 +144,15 @@ describe('agent-harness steerSubagent', () => {
     expect(toastError).toHaveBeenCalledWith(
       'Failed to steer subagent',
       expect.objectContaining({
-        description: 'generate failed',
+        description: 'Subagent aborted',
       }),
     )
-    expect(state.session.rollbackLocalSubagentSteer).not.toHaveBeenCalled()
-    expect(state.subagents.value[0]?.status).toBe('error')
-    expect(state.subagents.value[0]?.summary).toBe('generate failed')
+    expect(state.session.rollbackLocalSubagentSteer).toHaveBeenCalledWith(
+      'sub-1',
+      'retry',
+      'done',
+    )
+    expect(state.subagents.value[0]?.status).toBe('done')
   })
 
   it('re-adds a missing subagent as running when steered', async () => {
