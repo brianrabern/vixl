@@ -14,14 +14,6 @@ type DeriveAgentActivityArgs = {
   compacting?: boolean
 }
 
-const waitForSubagentsLabel = (subagents: SubagentTimelineItem[]): string => {
-  if (subagents.length === 1) {
-    const name = subagents[0]!.name.trim() || 'Sub-agent'
-    return `Waiting for ${name}`
-  }
-  return `Waiting for ${subagents.length} sub-agents`
-}
-
 const collectRunningTools = (turn: AgentTurn): ToolRun[] => {
   const tools: ToolRun[] = []
   for (const step of turn.steps) {
@@ -57,8 +49,6 @@ export default (args: DeriveAgentActivityArgs): string | null => {
   const runningSubagents = args.runningSubagents.filter(
     (item) => item.status === 'running',
   )
-  const blockingSubagents = runningSubagents.filter((item) => item.blocking)
-  const backgroundSubagents = runningSubagents.filter((item) => !item.blocking)
 
   const runningTools = args.turn ? collectRunningTools(args.turn) : []
   const nonSpawnRunning = runningTools.filter(
@@ -68,10 +58,6 @@ export default (args: DeriveAgentActivityArgs): string | null => {
     (tool) => tool.name === 'spawn_subagent',
   )
 
-  if (blockingSubagents.length > 0) {
-    return waitForSubagentsLabel(blockingSubagents)
-  }
-
   // Tool rows own the live verb once a call exists. Only spawn needs a
   // preamble before the sub-agent card appears.
   if (nonSpawnRunning.length > 0) {
@@ -80,10 +66,6 @@ export default (args: DeriveAgentActivityArgs): string | null => {
 
   if (spawnRunning.length > 0 && runningSubagents.length === 0) {
     return formatToolRunLabel(spawnRunning[spawnRunning.length - 1]!)
-  }
-
-  if (backgroundSubagents.length > 0) {
-    return waitForSubagentsLabel(backgroundSubagents)
   }
 
   if (!isLive) {

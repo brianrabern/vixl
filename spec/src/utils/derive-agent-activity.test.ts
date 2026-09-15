@@ -61,7 +61,7 @@ describe('deriveAgentActivity', () => {
     ).toBe('Waiting for MCP authentication')
   })
 
-  it('waits for a blocking subagent', () => {
+  it('returns null while a blocking subagent runs', () => {
     expect(
       deriveAgentActivity({
         status: 'streaming',
@@ -91,7 +91,7 @@ describe('deriveAgentActivity', () => {
           }),
         ],
       }),
-    ).toBe('Waiting for Reading auth')
+    ).toBeNull()
   })
 
   it('hides sticky activity while a parent tool is running', () => {
@@ -126,7 +126,7 @@ describe('deriveAgentActivity', () => {
     ).toBeNull()
   })
 
-  it('waits for background subagents when parent is ready', () => {
+  it('returns null for background subagents when parent is ready', () => {
     expect(
       deriveAgentActivity({
         status: 'ready',
@@ -156,7 +156,7 @@ describe('deriveAgentActivity', () => {
           }),
         ],
       }),
-    ).toBe('Waiting for Scanning permissions')
+    ).toBeNull()
   })
 
   it('hides sticky activity while create_plan is running', () => {
