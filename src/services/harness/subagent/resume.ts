@@ -46,6 +46,16 @@ const resumeSubagent = async (
   setMessages(subagentId, nextMessages)
 
   ctx.onHarnessEvent?.({
+    type: 'subagent-start',
+    subagentId,
+    toolCallId: record.toolCallId,
+    name: record.agentName,
+    blocking: false,
+    prompt: record.prompt,
+    model,
+    capabilities: record.capabilities ?? 'read-only',
+  })
+  ctx.onHarnessEvent?.({
     type: 'subagent-event',
     subagentId,
     parentToolCallId: record.toolCallId,

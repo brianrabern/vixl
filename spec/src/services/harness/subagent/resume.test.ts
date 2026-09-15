@@ -126,6 +126,16 @@ describe('resumeSubagent', () => {
     )
     expect(events).toEqual([
       expect.objectContaining({
+        type: 'subagent-start',
+        subagentId: 'sub-1',
+        toolCallId: 'tc-1',
+        name: 'explorer',
+        blocking: false,
+        prompt: 'first task',
+        model: 'local::qwen',
+        capabilities: 'read-only',
+      }),
+      expect.objectContaining({
         type: 'subagent-event',
         subagentId: 'sub-1',
         event: { type: 'subagent-steer', message: 'keep going' },

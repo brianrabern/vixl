@@ -488,6 +488,78 @@ describe('agent-harness events visible context gating', () => {
   })
 })
 
+describe('agent-harness events subagent start', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('re-adds a done subagent as running so the pill count picks it up', () => {
+    const state = buildState()
+    state.subagents.value = [
+      {
+        subagentId: 'sub-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'done',
+        events: [{ type: 'text-delta', delta: 'old' }],
+      },
+    ]
+    const { handleEvent } = createEvents(state, buildAttention(), deps)
+
+    handleEvent({
+      type: 'subagent-start',
+      subagentId: 'sub-1',
+      toolCallId: 'tc-1',
+      name: 'explorer',
+      blocking: false,
+      prompt: 'first task',
+      model: 'local::qwen',
+      capabilities: 'read-only',
+    })
+
+    expect(state.subagents.value).toEqual([
+      {
+        subagentId: 'sub-1',
+        name: 'explorer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+    ])
+    expect(state.session.upsertLocalSubagentStart).toHaveBeenCalledWith({
+      subagentId: 'sub-1',
+      toolCallId: 'tc-1',
+      name: 'explorer',
+      blocking: false,
+      prompt: 'first task',
+      model: 'local::qwen',
+    })
+  })
+
+  it('adds a missing subagent as running so the pill count picks it up', () => {
+    const state = buildState()
+    const { handleEvent } = createEvents(state, buildAttention(), deps)
+
+    handleEvent({
+      type: 'subagent-start',
+      subagentId: 'sub-2',
+      toolCallId: 'tc-2',
+      name: 'reviewer',
+      blocking: false,
+    })
+
+    expect(state.subagents.value).toEqual([
+      {
+        subagentId: 'sub-2',
+        name: 'reviewer',
+        blocking: false,
+        status: 'running',
+        events: [],
+      },
+    ])
+  })
+})
+
 describe('agent-harness events subagent result flush', () => {
   beforeEach(() => {
     vi.clearAllMocks()
