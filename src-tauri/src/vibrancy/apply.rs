@@ -1,3 +1,5 @@
+use std::sync::mpsc::Sender;
+
 const DEFAULT_HUE: f64 = 265.0;
 const DEFAULT_INTENSITY: f64 = 0.0;
 
@@ -6,32 +8,46 @@ pub fn apply_platform_vibrancy(
     dark: bool,
     hue: Option<f64>,
     intensity: Option<f64>,
+    done: Sender<()>,
 ) {
     let hue = hue.unwrap_or(DEFAULT_HUE);
     let intensity = intensity.unwrap_or(DEFAULT_INTENSITY);
 
     #[cfg(target_os = "macos")]
-    apply_macos(window, dark, hue, intensity);
+    apply_macos(window, dark, hue, intensity, done);
 
     #[cfg(windows)]
-    apply_windows(window, dark, hue, intensity);
+    {
+        apply_windows(window, dark, hue, intensity);
+        let _ = done.send(());
+    }
 
     #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (window, dark, hue, intensity);
+        let _ = done.send(());
     }
 }
 
 #[cfg(target_os = "macos")]
-fn apply_macos(window: &tauri::WebviewWindow, dark: bool, hue: f64, intensity: f64) {
+fn apply_macos(
+    window: &tauri::WebviewWindow,
+    dark: bool,
+    hue: f64,
+    intensity: f64,
+    done: Sender<()>,
+) {
     use tauri::Manager;
 
     let handle = window.app_handle().clone();
     let window = window.clone();
+    let queued = done.clone();
     if let Err(error) = handle.run_on_main_thread(move || {
         apply_macos_on_main(&window, dark, hue, intensity);
+        let _ = queued.send(());
     }) {
         log::warn!("Failed to apply window vibrancy on the main thread: {error}");
+        let _ = done.send(());
     }
 }
 
@@ -43,6 +59,7 @@ fn apply_macos_on_main(window: &tauri::WebviewWindow, dark: bool, hue: f64, inte
         NSAutoresizingMaskOptions, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
         NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowOrderingMode,
     };
+    use objc2_quartz_core::CATransaction;
 
     let Some(mtm) = MainThreadMarker::new() else {
         log::warn!("Window vibrancy must run on the main thread");
@@ -82,6 +99,9 @@ fn apply_macos_on_main(window: &tauri::WebviewWindow, dark: bool, hue: f64, inte
         }
     };
 
+    CATransaction::begin();
+    CATransaction::setDisableActions(true);
+
     effect.setMaterial(NSVisualEffectMaterial::UnderWindowBackground);
     effect.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
     effect.setState(NSVisualEffectState::FollowsWindowActiveState);
@@ -97,6 +117,8 @@ fn apply_macos_on_main(window: &tauri::WebviewWindow, dark: bool, hue: f64, inte
     }
 
     apply_macos_tint(&effect, dark, hue, intensity, mtm);
+
+    CATransaction::commit();
 }
 
 #[cfg(target_os = "macos")]

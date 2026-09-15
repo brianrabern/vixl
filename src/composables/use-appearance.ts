@@ -34,6 +34,7 @@ export default () => {
     () => [
       config.effectiveSettings.value['appearance.theme'],
       config.hydrated.value,
+      mode.system.value,
     ],
     () => {
       if (config.hydrated.value) {

@@ -80,8 +80,6 @@ export default () => {
         () => config.effectiveSettings.value['appearance.transparencyHue'],
         () => config.effectiveSettings.value['appearance.transparencyIntensity'],
         config.hydrated,
-        mode,
-        () => mode.state.value,
       ],
       () => {
         syncTransparency().catch((error: unknown) => {
