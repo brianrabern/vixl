@@ -60,6 +60,7 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
       await fsRename({ projectRoot: root,
         from: path,
         to: destination,
+        allowSensitive: true,
       })
       s.renamingPath.value = null
       await s.refresh()
@@ -101,6 +102,7 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
         projectRoot: root,
         path: snapshot.path,
         recursive: snapshot.isDirectory,
+        allowSensitive: true,
       })
       await s.refresh()
       s.deleteTarget.value = null
@@ -170,7 +172,12 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
       if (mode === 'folder') {
         await fsMkdir({ projectRoot: root, path: destination })
       } else {
-        await fsWriteFile({ projectRoot: root, path: destination, content: '' })
+        await fsWriteFile({
+          projectRoot: root,
+          path: destination,
+          content: '',
+          allowSensitive: true,
+        })
       }
       s.createDialogOpen.value = false
       s.createName.value = ''

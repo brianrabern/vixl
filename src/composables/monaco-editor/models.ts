@@ -263,7 +263,7 @@ export const createModels = (ctx: MonacoEditorContext, deps: ModelsDeps) => {
     ctx.saving.value = true
     try {
       const content = model.getValue()
-      await fsWriteFile({ projectRoot: root, path, content })
+      await fsWriteFile({ projectRoot: root, path, content, allowSensitive: true })
       deps.helpers.setPathDirty(path, false)
       ctx.emit('saved', { path, content })
       if (ctx.lspActive.value) {

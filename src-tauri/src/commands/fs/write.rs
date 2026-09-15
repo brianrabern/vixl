@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 
 use super::diff::build_file_diff;
 use super::path::{
-    canonical_project_root, reject_sensitive_path, relative_path, resolve_workspace_path,
+    canonical_project_root, reject_sensitive_path_unless_allowed, relative_path,
+    resolve_workspace_path,
 };
 use super::types::{FileDiff, WriteTempHandoffResult};
 
@@ -12,8 +13,9 @@ pub fn fs_write_file(
     project_root: String,
     path: String,
     content: String,
+    allow_sensitive: Option<bool>,
 ) -> Result<FileDiff, String> {
-    reject_sensitive_path(&path)?;
+    reject_sensitive_path_unless_allowed(&path, allow_sensitive)?;
     let root = canonical_project_root(&project_root)?;
     let absolute = resolve_workspace_path(&project_root, &path)?;
     let old_content = if absolute.exists() {
@@ -68,9 +70,14 @@ fn resolve_copy_destination(from: &Path, to: &Path) -> PathBuf {
 }
 
 #[tauri::command]
-pub fn fs_rename(project_root: String, from: String, to: String) -> Result<(), String> {
-    reject_sensitive_path(&from)?;
-    reject_sensitive_path(&to)?;
+pub fn fs_rename(
+    project_root: String,
+    from: String,
+    to: String,
+    allow_sensitive: Option<bool>,
+) -> Result<(), String> {
+    reject_sensitive_path_unless_allowed(&from, allow_sensitive)?;
+    reject_sensitive_path_unless_allowed(&to, allow_sensitive)?;
     let absolute_from = resolve_workspace_path(&project_root, &from)?;
     let absolute_to = resolve_workspace_path(&project_root, &to)?;
     if !absolute_from.exists() {
@@ -90,8 +97,9 @@ pub fn fs_delete(
     project_root: String,
     path: String,
     recursive: Option<bool>,
+    allow_sensitive: Option<bool>,
 ) -> Result<(), String> {
-    reject_sensitive_path(&path)?;
+    reject_sensitive_path_unless_allowed(&path, allow_sensitive)?;
     let absolute = resolve_workspace_path(&project_root, &path)?;
     if !absolute.exists() {
         return Err("Path does not exist".to_string());
@@ -110,9 +118,14 @@ pub fn fs_delete(
 }
 
 #[tauri::command]
-pub fn fs_copy(project_root: String, from: String, to: String) -> Result<(), String> {
-    reject_sensitive_path(&from)?;
-    reject_sensitive_path(&to)?;
+pub fn fs_copy(
+    project_root: String,
+    from: String,
+    to: String,
+    allow_sensitive: Option<bool>,
+) -> Result<(), String> {
+    reject_sensitive_path_unless_allowed(&from, allow_sensitive)?;
+    reject_sensitive_path_unless_allowed(&to, allow_sensitive)?;
     let absolute_from = resolve_workspace_path(&project_root, &from)?;
     let absolute_to = resolve_workspace_path(&project_root, &to)?;
     if !absolute_from.exists() {
@@ -121,7 +134,7 @@ pub fn fs_copy(project_root: String, from: String, to: String) -> Result<(), Str
 
     let destination = resolve_copy_destination(&absolute_from, &absolute_to);
     if let Some(name) = destination.file_name().and_then(|value| value.to_str()) {
-        reject_sensitive_path(name)?;
+        reject_sensitive_path_unless_allowed(name, allow_sensitive)?;
     }
     if destination.exists() {
         return Err("Destination already exists".to_string());
@@ -131,9 +144,14 @@ pub fn fs_copy(project_root: String, from: String, to: String) -> Result<(), Str
 }
 
 #[tauri::command]
-pub fn fs_move(project_root: String, from: String, to: String) -> Result<(), String> {
-    reject_sensitive_path(&from)?;
-    reject_sensitive_path(&to)?;
+pub fn fs_move(
+    project_root: String,
+    from: String,
+    to: String,
+    allow_sensitive: Option<bool>,
+) -> Result<(), String> {
+    reject_sensitive_path_unless_allowed(&from, allow_sensitive)?;
+    reject_sensitive_path_unless_allowed(&to, allow_sensitive)?;
     let absolute_from = resolve_workspace_path(&project_root, &from)?;
     let absolute_to = resolve_workspace_path(&project_root, &to)?;
     if !absolute_from.exists() {
@@ -142,7 +160,7 @@ pub fn fs_move(project_root: String, from: String, to: String) -> Result<(), Str
 
     let destination = resolve_copy_destination(&absolute_from, &absolute_to);
     if let Some(name) = destination.file_name().and_then(|value| value.to_str()) {
-        reject_sensitive_path(name)?;
+        reject_sensitive_path_unless_allowed(name, allow_sensitive)?;
     }
     if destination.exists() {
         return Err("Destination already exists".to_string());

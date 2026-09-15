@@ -142,6 +142,16 @@ pub(crate) fn reject_sensitive_path(user_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub(crate) fn reject_sensitive_path_unless_allowed(
+    user_path: &str,
+    allow_sensitive: Option<bool>,
+) -> Result<(), String> {
+    if allow_sensitive.unwrap_or(false) {
+        return Ok(());
+    }
+    reject_sensitive_path(user_path)
+}
+
 pub(crate) fn relative_path(root: &Path, absolute: &Path) -> String {
     absolute
         .strip_prefix(root)

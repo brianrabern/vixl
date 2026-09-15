@@ -21,6 +21,7 @@ export default async (args: {
     projectRoot: args.projectRoot,
     path: args.path,
     content: args.content,
+    allowSensitive: true,
   })
   return 'disk'
 }

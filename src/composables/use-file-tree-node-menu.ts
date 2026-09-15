@@ -194,12 +194,14 @@ export default () => {
           projectRoot: root,
           from: sourcePath,
           to: destinationPath,
+          allowSensitive: true,
         })
       } else {
         await fsMove({
           projectRoot: root,
           from: sourcePath,
           to: destinationPath,
+          allowSensitive: true,
         })
         clipboard.clear()
       }

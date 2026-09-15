@@ -69,6 +69,7 @@ export const fsWriteFile = (args: {
   projectRoot: string
   path: string
   content: string
+  allowSensitive?: boolean
 }): Promise<unknown> => call('fs_write_file', args)
 
 export const writeTempHandoff = (args: {
@@ -125,24 +126,28 @@ export const fsRename = (args: {
   projectRoot: string
   from: string
   to: string
+  allowSensitive?: boolean
 }): Promise<void> => call('fs_rename', args)
 
 export const fsDelete = (args: {
   projectRoot: string
   path: string
   recursive?: boolean
+  allowSensitive?: boolean
 }): Promise<void> => call('fs_delete', args)
 
 export const fsCopy = (args: {
   projectRoot: string
   from: string
   to: string
+  allowSensitive?: boolean
 }): Promise<void> => call('fs_copy', args)
 
 export const fsMove = (args: {
   projectRoot: string
   from: string
   to: string
+  allowSensitive?: boolean
 }): Promise<void> => call('fs_move', args)
 
 export const fsMkdir = (args: {

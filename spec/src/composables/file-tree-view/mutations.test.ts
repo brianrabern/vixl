@@ -85,6 +85,7 @@ describe('createFileTreeMutations delete', () => {
       projectRoot: '/tmp/proj',
       path: 'src',
       recursive: true,
+      allowSensitive: true,
     })
     expect(state.refresh).toHaveBeenCalledTimes(1)
     expect(toast.success).toHaveBeenCalledWith('Folder deleted')
@@ -106,6 +107,7 @@ describe('createFileTreeMutations delete', () => {
       projectRoot: '/tmp/proj',
       path: 'src/main.ts',
       recursive: false,
+      allowSensitive: true,
     })
     expect(toast.success).toHaveBeenCalledWith('File deleted')
   })
@@ -142,6 +144,7 @@ describe('createFileTreeMutations delete', () => {
       projectRoot: '/tmp/proj',
       path: 'src/gone.ts',
       recursive: false,
+      allowSensitive: true,
     })
     expect(toast.success).toHaveBeenCalledWith('File deleted')
   })
@@ -225,6 +228,7 @@ describe('createFileTreeMutations delete', () => {
       projectRoot: '/tmp/proj',
       path: '.codegraph',
       recursive: true,
+      allowSensitive: true,
     })
     expect(mcpStop.mock.invocationCallOrder[0]).toBeLessThan(
       fsDelete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
