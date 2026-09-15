@@ -13,6 +13,7 @@ type ComposerSendArgs = {
   mentions?: ContextMention[]
   skipUserMessage?: boolean
   skipUserPersist?: boolean
+  appendedUserMessageId?: string
 }
 
 export default (
@@ -28,5 +29,6 @@ export default (
     mentions: args.mentions,
     skipUserMessage: args.skipUserMessage,
     skipUserPersist: args.skipUserPersist,
+    appendedUserMessageId: args.appendedUserMessageId,
   })
 }

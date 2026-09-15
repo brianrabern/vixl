@@ -69,9 +69,10 @@ const handleRemove = (id: string): void => {
           <TooltipContent>Queued</TooltipContent>
         </Tooltip>
         <QueueItemContent
+          v-if="item.text"
           class="line-clamp-3 min-w-0 flex-1 whitespace-normal break-words"
         >
-          {{ item.text || (item.files.length > 0 ? 'See attached image(s).' : '') }}
+          {{ item.text }}
         </QueueItemContent>
         <QueueItemActions class="ml-auto shrink-0 self-start">
           <Tooltip>

@@ -7,9 +7,8 @@ import parseModelRef from '@/utils/parse-model-ref'
  * Composer-side vision gate for attachment decisions.
  *
  * Uses the same createModel + resolveModelVision path as the orchestrator so
- * custom `vision` flags and LanguageModel `supportedUrls` stay consistent.
- * On parse/create failure, defaults to true (safer to attach PNG; non-vision
- * models still get images stripped later in prepareMessagesForModelVision).
+ * custom `vision` flags, catalog meta, and builtin Image Input tables stay
+ * consistent. On parse/create failure, defaults to false (fail closed).
  */
 export default async (args: {
   modelRef: string
@@ -17,7 +16,7 @@ export default async (args: {
 }): Promise<boolean> => {
   const parsed = parseModelRef(args.modelRef)
   if (!parsed) {
-    return true
+    return false
   }
 
   try {
@@ -33,6 +32,6 @@ export default async (args: {
       settings: args.settings,
     })
   } catch {
-    return true
+    return false
   }
 }

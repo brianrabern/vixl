@@ -732,6 +732,115 @@ describe('agent-harness send persist model/mode', () => {
     )
   })
 
+  it('appends image-only user messages with file parts and no text', async () => {
+    const state = buildState()
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: '',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      internal: true,
+      files: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: 'data:image/png;base64,AAA',
+          filename: 'shot.png',
+        },
+      ],
+    })
+
+    expect(state.session.appendLocalMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parts: [
+          {
+            type: 'file',
+            mediaType: 'image/png',
+            url: 'data:image/png;base64,AAA',
+            filename: 'shot.png',
+          },
+        ],
+      }),
+    )
+    const appended = vi.mocked(state.session.appendLocalMessage).mock.calls[0]?.[0] as {
+      id: string
+      parts: unknown[]
+    }
+    expect(appended.parts.some((part) => (part as { type: string }).type === 'text')).toBe(
+      false,
+    )
+    expect(runOrchestrator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userText: '',
+        appendedUserMessageId: appended.id,
+      }),
+    )
+  })
+
+  it('does not start a turn when empty text and all files are dropped', async () => {
+    const state = buildState()
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: '   ',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      internal: true,
+      files: [
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          url: '',
+          filename: 'shot.png',
+        },
+      ],
+    })
+
+    expect(toastError).toHaveBeenCalledWith('Nothing to send', {
+      description: 'Attachments could not be restored.',
+    })
+    expect(state.session.appendLocalMessage).not.toHaveBeenCalled()
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(flushPendingBackgroundResume).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
+    expect(state.status.value).toBe('ready')
+    expect(state.fleetSidebar.refreshSlug).toHaveBeenCalledWith('proj')
+  })
+
+  it('does not start an internal skip-user turn with no text or files', async () => {
+    const state = buildState()
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: '',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    expect(toastError).toHaveBeenCalledWith('Nothing to send', {
+      description: 'Attachments could not be restored.',
+    })
+    expect(state.session.appendLocalMessage).not.toHaveBeenCalled()
+    expect(state.session.startAgentTurn).not.toHaveBeenCalled()
+    expect(runOrchestrator).not.toHaveBeenCalled()
+    expect(state.status.value).toBe('ready')
+  })
+
   it('bails out when aborted while normalizing images', async () => {
     let resolveNormalize: (value: {
       dataUrl: string
@@ -864,6 +973,105 @@ describe('agent-harness send persist model/mode', () => {
       'Agent run failed',
       expect.objectContaining({ description: 'provider down' }),
     )
+  })
+
+  it('maps image rejection payload errors to a vision-capability hint', async () => {
+    runOrchestrator.mockRejectedValueOnce(
+      new Error('The image was not allowed to be used with this model'),
+    )
+    const state = buildState()
+    const attention = buildAttention()
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    const description =
+      'The selected model or provider rejected the image input. Switch to a vision-capable model or remove the image.'
+    expect(state.session.setAgentTurnError).toHaveBeenCalledWith({
+      kind: 'error',
+      message: description,
+    })
+    expect(toastError).toHaveBeenCalledWith(
+      'Agent run failed',
+      expect.objectContaining({ description }),
+    )
+  })
+
+  it('maps malformed image_url payload errors without a vision-capability hint', async () => {
+    runOrchestrator.mockRejectedValueOnce(
+      new Error(
+        "Invalid 'input[18].content[1].image_url'. Expected a valid URL, but got a value with an invalid format.",
+      ),
+    )
+    const state = buildState()
+    const attention = buildAttention()
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    const description =
+      'An image in this conversation could not be read by the provider. Remove the image and attach it again.'
+    expect(state.session.setAgentTurnError).toHaveBeenCalledWith({
+      kind: 'error',
+      message: description,
+    })
+    expect(toastError).toHaveBeenCalledWith(
+      'Agent run failed',
+      expect.objectContaining({ description }),
+    )
+    expect(description).not.toContain('vision-capable')
+  })
+
+  it('maps other invalid json payload errors without image-size advice', async () => {
+    const providerMessage =
+      'AI_InvalidResponseBodyError: Invalid JSON response body: schema mismatch'
+    runOrchestrator.mockRejectedValueOnce(new Error(providerMessage))
+    const state = buildState()
+    const attention = buildAttention()
+    const { send } = createSend(state, attention, {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      internal: true,
+    })
+
+    const description = `${providerMessage} The provider rejected the request payload.`
+    expect(state.session.setAgentTurnError).toHaveBeenCalledWith({
+      kind: 'error',
+      message: description,
+    })
+    expect(toastError).toHaveBeenCalledWith(
+      'Agent run failed',
+      expect.objectContaining({ description }),
+    )
+    expect(description).not.toContain('Try smaller')
   })
 
   it('does not enqueue a user send while waiting on background subagents', async () => {
@@ -1283,9 +1491,11 @@ describe('agent-harness send persist model/mode', () => {
       model: string
       skipUserMessage?: boolean
       skipUserPersist?: boolean
+      appendedUserMessageId?: string
     }
     expect(queued.skipUserMessage).toBe(true)
     expect(queued.skipUserPersist).toBe(true)
+    expect(queued.appendedUserMessageId).toEqual(expect.any(String))
     expect(state.session.appendLocalMessage).toHaveBeenCalledTimes(1)
 
     state.resumingBackgroundBatch.value = false
@@ -1298,13 +1508,17 @@ describe('agent-harness send persist model/mode', () => {
       model: queued.model,
       skipUserMessage: queued.skipUserMessage,
       skipUserPersist: queued.skipUserPersist,
+      appendedUserMessageId: queued.appendedUserMessageId,
       internal: true,
     })
 
     expect(state.session.appendLocalMessage).toHaveBeenCalledTimes(1)
     expect(runOrchestrator).toHaveBeenCalledTimes(1)
     expect(runOrchestrator).toHaveBeenCalledWith(
-      expect.objectContaining({ skipUserPersist: true }),
+      expect.objectContaining({
+        skipUserPersist: true,
+        appendedUserMessageId: queued.appendedUserMessageId,
+      }),
     )
   })
 

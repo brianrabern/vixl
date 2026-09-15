@@ -2,7 +2,7 @@ import { toast } from 'vue-sonner'
 import type { ReasoningLevel } from '@/types/models/reasoning-level'
 import type { VixlChatMode } from '@/types/vixl/vixl-settings'
 import type { FileCheckpointFilePolicy } from '@/types/harness/file-checkpoint'
-import type { FileUIPart } from 'ai'
+import type { FileUIPart, UIMessage } from 'ai'
 import type { ContextMention } from '@/types/harness/context-mention'
 import restoreFileCheckpoints, {
   aggregateTurnFileDiffs,
@@ -22,6 +22,7 @@ type PersistenceDeps = {
     files?: FileUIPart[]
     skipUserMessage?: boolean
     skipUserPersist?: boolean
+    appendedUserMessageId?: string
     internal?: boolean
   }) => Promise<void>
 }
@@ -65,6 +66,23 @@ export default (state: AgentHarnessState, deps: PersistenceDeps) => {
     return true
   }
 
+  const filePartsFrom = (message: UIMessage): FileUIPart[] =>
+    message.parts.filter((part): part is FileUIPart => part.type === 'file')
+
+  const textFrom = (message: UIMessage): string =>
+    message.parts
+      .filter((part) => part.type === 'text')
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .join('')
+      .trim()
+
+  const findUserMessage = (messageId: string): UIMessage | null => {
+    const item = session.timeline.value.find(
+      (entry) => entry.type === 'user' && entry.message.id === messageId,
+    )
+    return item?.type === 'user' ? item.message : null
+  }
+
   const submitEditMessage = async (args: {
     newContent: string
     mode: VixlChatMode
@@ -77,8 +95,12 @@ export default (state: AgentHarnessState, deps: PersistenceDeps) => {
       return
     }
 
+    const edited = findUserMessage(messageId)
+    const files = edited ? filePartsFrom(edited) : []
+    const originalText = edited ? textFrom(edited) : ''
     const text = args.newContent.trim()
-    if (!text) {
+    if (!text && files.length === 0) {
+      toast.error('Message cannot be empty')
       return
     }
 
@@ -90,17 +112,34 @@ export default (state: AgentHarnessState, deps: PersistenceDeps) => {
           return
         }
       }
-      await session.truncateBeforeMessage(
-        options.projectSlug,
-        options.chatId,
-        messageId,
-      )
+      const reuseUserMessage = files.length > 0 && !text && !originalText
+      if (reuseUserMessage) {
+        await session.truncateAfterUserMessage(
+          options.projectSlug,
+          options.chatId,
+          messageId,
+        )
+      } else {
+        await session.truncateBeforeMessage(
+          options.projectSlug,
+          options.chatId,
+          messageId,
+        )
+      }
       state.chatStore.cancelEditMessage()
       await deps.send({
         text,
         mode: args.mode,
         model: args.model,
         reasoning: args.reasoning,
+        ...(files.length > 0 ? { files } : {}),
+        ...(reuseUserMessage
+          ? {
+              skipUserMessage: true,
+              skipUserPersist: true,
+              appendedUserMessageId: messageId,
+            }
+          : {}),
         internal: true,
       })
     } catch (err) {
@@ -125,12 +164,9 @@ export default (state: AgentHarnessState, deps: PersistenceDeps) => {
       return
     }
 
-    const text = lastUser.parts
-      .filter((part) => part.type === 'text')
-      .map((part) => (part.type === 'text' ? part.text : ''))
-      .join('')
-      .trim()
-    if (!text) {
+    const text = textFrom(lastUser)
+    const files = filePartsFrom(lastUser)
+    if (!text && files.length === 0) {
       return
     }
 
@@ -151,8 +187,10 @@ export default (state: AgentHarnessState, deps: PersistenceDeps) => {
         mode: args.mode,
         model: args.model,
         reasoning: args.reasoning,
+        ...(files.length > 0 ? { files } : {}),
         skipUserMessage: true,
         skipUserPersist: true,
+        appendedUserMessageId: lastUser.id,
         internal: true,
       })
     } catch (err) {

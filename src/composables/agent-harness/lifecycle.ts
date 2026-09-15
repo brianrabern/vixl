@@ -118,6 +118,7 @@ export default (
         mentions: item.mentions,
         skipUserMessage: item.skipUserMessage,
         skipUserPersist: item.skipUserPersist,
+        appendedUserMessageId: item.appendedUserMessageId,
         internal: true,
       })
     } catch (err) {

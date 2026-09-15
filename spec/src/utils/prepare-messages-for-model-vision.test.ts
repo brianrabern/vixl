@@ -184,4 +184,108 @@ describe('prepareMessagesForModelVision', () => {
     expect(preparedOff[0]).toBe(assistant)
     expect(preparedOn[0]).toBe(assistant)
   })
+
+  it('replaces a dead blob image url with a placeholder when vision is on', async () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'u-blob',
+        role: 'user',
+        parts: [
+          { type: 'text', text: 'What is this?' },
+          {
+            type: 'file',
+            mediaType: 'image/png',
+            url: 'blob:https://app.local/shot-1',
+            filename: 'shot.png',
+          },
+        ],
+      },
+    ]
+    const prepared = await prepareMessagesForModelVision(messages, true)
+    expect(prepared[0]?.parts).toEqual([
+      { type: 'text', text: 'What is this?' },
+      {
+        type: 'text',
+        text: '[Attachment: shot.png (image/png)]',
+      },
+    ])
+  })
+
+  it('replaces a file image url with a placeholder when vision is on', async () => {
+    const prepared = await prepareMessagesForModelVision(
+      [
+        {
+          id: 'u-file',
+          role: 'user',
+          parts: [
+            {
+              type: 'file',
+              mediaType: 'image/jpeg',
+              url: 'file:///tmp/shot.jpg',
+              filename: 'shot.jpg',
+            },
+          ],
+        },
+      ],
+      true,
+    )
+    expect(prepared[0]?.parts).toEqual([
+      {
+        type: 'text',
+        text: '[Attachment: shot.jpg (image/jpeg)]',
+      },
+    ])
+  })
+
+  it('replaces an empty image url with a placeholder when vision is on', async () => {
+    const prepared = await prepareMessagesForModelVision(
+      [
+        {
+          id: 'u-empty',
+          role: 'user',
+          parts: [
+            {
+              type: 'file',
+              mediaType: 'image/png',
+              url: '',
+              filename: 'shot.png',
+            },
+          ],
+        },
+      ],
+      true,
+    )
+    expect(prepared[0]?.parts).toEqual([
+      {
+        type: 'text',
+        text: '[Attachment: shot.png (image/png)]',
+      },
+    ])
+  })
+
+  it('passes data and https image urls through when vision is on', async () => {
+    const messages: UIMessage[] = [
+      {
+        id: 'u-ok',
+        role: 'user',
+        parts: [
+          {
+            type: 'file',
+            mediaType: 'image/png',
+            url: 'data:image/png;base64,abc',
+            filename: 'shot.png',
+          },
+          {
+            type: 'file',
+            mediaType: 'image/webp',
+            url: 'https://cdn.example.com/shot.webp',
+            filename: 'shot.webp',
+          },
+        ],
+      },
+    ]
+    const prepared = await prepareMessagesForModelVision(messages, true)
+    expect(prepared[0]).toBe(messages[0])
+    expect(prepared[0]!.parts).toEqual(messages[0]!.parts)
+  })
 })

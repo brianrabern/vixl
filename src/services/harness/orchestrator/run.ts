@@ -20,20 +20,30 @@ export default async (input: OrchestratorInput): Promise<void> => {
     chatId,
     messages,
     userText,
+    appendedUserMessageId,
     skipUserPersist = false,
     assistantId: inputAssistantId,
     ...streamInput
   } = input
 
-  const existingUser = [...messages]
-    .reverse()
-    .find(
-      (message) =>
-        message.role === 'user' &&
-        message.parts.some(
-          (part) => part.type === 'text' && part.text === userText,
-        ),
-    )
+  const existingUserById = appendedUserMessageId
+    ? messages.find(
+        (message) =>
+          message.role === 'user' && message.id === appendedUserMessageId,
+      )
+    : undefined
+
+  const existingUser =
+    existingUserById ??
+    [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === 'user' &&
+          message.parts.some(
+            (part) => part.type === 'text' && part.text === userText,
+          ),
+      )
 
   const existingUserMeta =
     existingUser?.metadata && typeof existingUser.metadata === 'object'
@@ -78,7 +88,7 @@ export default async (input: OrchestratorInput): Promise<void> => {
     })
   }
 
-  if (isFirstUserMessage) {
+  if (isFirstUserMessage && userText.trim().length > 0) {
     // Keep the short "New Agent" placeholder while naming runs. Never copy the
     // user prompt into the sidebar title (including sync fallbacks).
     runSideTask({

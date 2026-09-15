@@ -14,6 +14,7 @@ import collectExplicitAgentMentions from '@/utils/collect-explicit-agent-mention
 import { loadEffectiveSettings } from '@/services/config/vixl-config'
 import flushPendingBackgroundResume from '@/services/harness/subagent/flush-pending-resume'
 import { hasPendingBackgroundResume } from '@/services/harness/subagent/registry'
+import describeAgentRunError from '@/utils/describe-agent-run-error'
 import normalizeAttachmentFiles from '@/utils/normalize-attachment-files'
 import appendSendUserMessage from './append-send-user-message'
 import applyParentTurnStart from './apply-parent-turn-start'
@@ -30,6 +31,7 @@ export type SendArgs = {
   files?: FileUIPart[]
   skipUserMessage?: boolean
   skipUserPersist?: boolean
+  appendedUserMessageId?: string
   // Internal sends (drain, retry, edit, forceSendQueued) bypass the outbound
   // composer busy enqueue. They still defer when compaction or a background
   // resume is in flight: drain/retry/edit re-enqueue, force-send waits first.
@@ -156,9 +158,22 @@ export default (
         return
       }
 
+      if (
+        args.text.trim().length === 0 &&
+        !files.some((file) => Boolean(file.url))
+      ) {
+        toast.error('Nothing to send', {
+          description: 'Attachments could not be restored.',
+        })
+        status.value = 'ready'
+        await fleetSidebar.refreshSlug(options.projectSlug)
+        return
+      }
+
       let userMessageAppended = false
+      let appendedUserMessageId = args.appendedUserMessageId
       if (!args.skipUserMessage) {
-        const abortedBeforeAppend = await appendSendUserMessage({
+        const appended = await appendSendUserMessage({
           session,
           text: args.text,
           model: args.model,
@@ -168,11 +183,12 @@ export default (
           projectRoot,
           aborted: () => controller.signal.aborted,
         })
-        if (abortedBeforeAppend) {
+        if (!appended) {
           status.value = 'ready'
           await fleetSidebar.refreshSlug(options.projectSlug)
           return
         }
+        appendedUserMessageId = appended.id
         userMessageAppended = true
       }
 
@@ -191,6 +207,7 @@ export default (
               ...args,
               skipUserMessage: args.skipUserMessage || userMessageAppended,
               skipUserPersist: args.skipUserPersist || userMessageAppended,
+              appendedUserMessageId,
             }),
           abortController,
           controller,
@@ -236,6 +253,7 @@ export default (
         messages: session.messages.value,
         timeline: session.timeline.value,
         userText: args.text,
+        appendedUserMessageId,
         mentions,
         signal: controller.signal,
         onEvent: deps.handleEvent,
@@ -261,9 +279,7 @@ export default (
         err instanceof Error &&
         (err.name === 'TimeoutError' || /timeout/i.test(err.message))
       const message = err instanceof Error ? err.message : 'Unknown error'
-      const payloadHint = /invalid json response body/i.test(message)
-        ? ' The provider rejected the request payload. Try smaller or fewer images.'
-        : ''
+      const runDescription = describeAgentRunError(message)
       if (aborted) {
         status.value = 'ready'
         if (turnStarted) {
@@ -281,7 +297,7 @@ export default (
             ? 'The model took too long to respond.'
             : message.includes('No output generated')
               ? 'The model returned an empty response. Check your API key and model ID in Settings.'
-              : `${message}${payloadHint}`,
+              : runDescription,
         })
         session.finishAgentTurn()
         attention.applyTurnEndAttention('error')
@@ -289,7 +305,7 @@ export default (
       toast.error('Agent run failed', {
         description: error.value.includes('No output generated')
           ? 'The model returned an empty response. Check your Gateway API key and model ID in Settings.'
-          : `${error.value}${payloadHint}`,
+          : runDescription,
       })
       await fleetSidebar.refreshSlug(options.projectSlug)
     } finally {

@@ -46,4 +46,20 @@ describe('useMessageQueue', () => {
 
     expect(queue.take()?.skipUserPersist).toBe(true)
   })
+
+  it('preserves appendedUserMessageId on queued items', () => {
+    const queue = useMessageQueue()
+
+    queue.enqueue({
+      text: '',
+      files: [],
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+      skipUserMessage: true,
+      skipUserPersist: true,
+      appendedUserMessageId: 'user-msg-1',
+    })
+
+    expect(queue.take()?.appendedUserMessageId).toBe('user-msg-1')
+  })
 })

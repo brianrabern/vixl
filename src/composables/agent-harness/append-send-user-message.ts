@@ -25,7 +25,11 @@ const buildUserParts = (
   const parts: Array<
     | { type: 'text'; text: string }
     | { type: 'file'; mediaType: string; url: string; filename?: string }
-  > = [{ type: 'text', text }]
+  > = []
+
+  if (text.trim().length > 0) {
+    parts.push({ type: 'text', text })
+  }
 
   // Keep file parts on the UI message so the thread can show thumbnails.
   // Non-vision models get text placeholders later, only for
@@ -56,10 +60,12 @@ const buildUserParts = (
   return parts
 }
 
-export default async (args: AppendSendUserMessageArgs): Promise<boolean> => {
+export default async (
+  args: AppendSendUserMessageArgs,
+): Promise<{ id: string } | null> => {
   const parts = buildUserParts(args.text, args.files)
-  if (args.aborted()) {
-    return true
+  if (args.aborted() || parts.length === 0) {
+    return null
   }
 
   const skillNames = (
@@ -73,8 +79,9 @@ export default async (args: AppendSendUserMessageArgs): Promise<boolean> => {
     args.agentNames,
   )
 
+  const id = crypto.randomUUID()
   args.session.appendLocalMessage({
-    id: crypto.randomUUID(),
+    id,
     role: 'user',
     parts,
     metadata: {
@@ -84,5 +91,5 @@ export default async (args: AppendSendUserMessageArgs): Promise<boolean> => {
     },
   })
 
-  return false
+  return { id }
 }

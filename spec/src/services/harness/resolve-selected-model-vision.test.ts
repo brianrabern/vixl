@@ -41,13 +41,13 @@ describe('resolveSelectedModelVision', () => {
     resolveModelVision.mockReset()
   })
 
-  it('returns true when model ref cannot be parsed', async () => {
+  it('returns false when model ref cannot be parsed', async () => {
     expect(
       await resolveSelectedModelVision({
         modelRef: 'not-a-ref',
         settings: settings(),
       }),
-    ).toBe(true)
+    ).toBe(false)
     expect(createModel).not.toHaveBeenCalled()
   })
 
@@ -75,7 +75,7 @@ describe('resolveSelectedModelVision', () => {
     })
   })
 
-  it('returns true when createModel fails', async () => {
+  it('returns false when createModel fails', async () => {
     createModel.mockRejectedValue(new Error('keychain unavailable'))
 
     expect(
@@ -83,7 +83,7 @@ describe('resolveSelectedModelVision', () => {
         modelRef: 'openai::gpt-4o',
         settings: settings(),
       }),
-    ).toBe(true)
+    ).toBe(false)
     expect(resolveModelVision).not.toHaveBeenCalled()
   })
 

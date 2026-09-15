@@ -7,10 +7,19 @@ const attachmentPlaceholder = (
 ): string =>
   `[Attachment: ${filename || 'file'} (${mediaType || 'unknown'})]`
 
+const isSendableImageUrl = (url: string | undefined): boolean =>
+  Boolean(
+    url &&
+      (url.startsWith('data:') ||
+        url.startsWith('https:') ||
+        url.startsWith('http:')),
+  )
+
 /**
  * Prepare UI messages for convertToModelMessages.
- * - image file parts pass through when the model supports vision; otherwise
- *   they become text placeholders
+ * - image file parts pass through when the model supports vision and the url is
+ *   a data, http, or https URL; blob, file, empty, and other schemes become
+ *   text placeholders even when vision is on
  * - non-image file parts always decode to text content so JSON payloads reach
  *   the model (without stuffing them into the composer textarea)
  * UI timeline messages keep their original file parts for display.
@@ -38,7 +47,7 @@ export default async (
         const filename = part.filename
 
         if (mediaType.startsWith('image/')) {
-          if (supportsVision) {
+          if (supportsVision && isSendableImageUrl(part.url)) {
             parts.push(part)
             continue
           }

@@ -69,4 +69,98 @@ describe('PromptInput submitForm', () => {
 
     expect(ctx.textInput.value).toBe('')
   })
+
+  it('drops failed blob conversions, toasts, and still sends remaining text', async () => {
+    const onError = vi.fn<(err: { code: string; message: string }) => void>()
+    const onSubmit = vi.fn<(message: {
+      text: string
+      files: { url: string }[]
+    }) => Promise<void>>().mockResolvedValue(undefined)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('expired'))),
+    )
+    const Host = defineComponent({
+      setup() {
+        const ctx = usePromptInputProvider({
+          initialInput: 'caption',
+          onSubmit,
+          onError,
+        })
+        ctx.files.value = [
+          {
+            id: 'att-1',
+            type: 'file',
+            mediaType: 'image/png',
+            url: 'blob:https://app.local/shot-1',
+            filename: 'shot.png',
+          },
+        ]
+        return { ctx }
+      },
+      template: '<div />',
+    })
+
+    const wrapper = mount(Host)
+    const ctx = (wrapper.vm as unknown as { ctx: ReturnType<typeof usePromptInput> }).ctx
+
+    await ctx.submitForm()
+    await flushPromises()
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'submit_error',
+      message: 'Could not attach image. The preview expired. Try attaching it again.',
+    })
+    expect(onSubmit).toHaveBeenCalledWith({
+      text: 'caption',
+      files: [],
+    })
+    expect(ctx.textInput.value).toBe('')
+    expect(ctx.files.value).toHaveLength(0)
+    vi.unstubAllGlobals()
+  })
+
+  it('aborts submit when blob conversion fails and nothing remains to send', async () => {
+    const onError = vi.fn<(err: { code: string; message: string }) => void>()
+    const onSubmit = vi.fn<(...args: unknown[]) => Promise<void>>()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('expired'))),
+    )
+    const Host = defineComponent({
+      setup() {
+        const ctx = usePromptInputProvider({
+          initialInput: '   ',
+          onSubmit,
+          onError,
+        })
+        ctx.files.value = [
+          {
+            id: 'att-1',
+            type: 'file',
+            mediaType: 'image/png',
+            url: 'blob:https://app.local/shot-1',
+            filename: 'shot.png',
+          },
+        ]
+        return { ctx }
+      },
+      template: '<div />',
+    })
+
+    const wrapper = mount(Host)
+    const ctx = (wrapper.vm as unknown as { ctx: ReturnType<typeof usePromptInput> }).ctx
+
+    await ctx.submitForm()
+    await flushPromises()
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'submit_error',
+      message: 'Could not attach image. The preview expired. Try attaching it again.',
+    })
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(ctx.textInput.value).toBe('   ')
+    expect(ctx.files.value).toHaveLength(1)
+    vi.unstubAllGlobals()
+  })
 })

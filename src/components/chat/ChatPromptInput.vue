@@ -350,14 +350,12 @@ const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
   }
   if (isEditing.value) {
     emit('submitEdit', {
-      text: text || (files.length > 0 ? 'See attached image(s).' : ''),
+      text,
       mode: session.selectedMode,
       model: session.selectedModelRef,
     })
     return
   }
-
-  const fallbackText = 'See attached image(s).'
 
   let mentions = (() => {
     const editor = chatPromptEditor.editorRef.value
@@ -378,7 +376,7 @@ const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
   const normalizedFiles = await normalizeAttachmentFiles(files)
 
   emit('submit', {
-    text: text || (normalizedFiles.length > 0 ? fallbackText : ''),
+    text,
     mode: session.selectedMode,
     model: session.selectedModelRef,
     projectId: props.showProjectSelect

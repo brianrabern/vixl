@@ -5,8 +5,11 @@ import type {
 } from '@/types/vixl/vixl-settings'
 import { getCustomProvider } from '@/services/providers/registry'
 import { getModelCatalogMeta } from '@/services/models/model-catalog-meta'
+import { resolveModelsDevVision } from '@/services/models/models-dev'
 
-const hasImageSupportedUrls = async (model: LanguageModel): Promise<boolean> => {
+const hasConcreteImageSupportedUrls = async (
+  model: LanguageModel,
+): Promise<boolean> => {
   if (typeof model === 'string') {
     return false
   }
@@ -14,10 +17,12 @@ const hasImageSupportedUrls = async (model: LanguageModel): Promise<boolean> => 
     return false
   }
   const urls = await Promise.resolve(model.supportedUrls)
-  // AI SDK adapters advertise vision via supportedUrls keys like "image/*".
-  return Object.keys(urls).some(
-    (mediaType) => mediaType === 'image' || mediaType.startsWith('image/'),
-  )
+  return Object.keys(urls).some((mediaType) => {
+    if (mediaType.includes('*')) {
+      return false
+    }
+    return mediaType === 'image' || mediaType.startsWith('image/')
+  })
 }
 
 const findCustomModel = (
@@ -32,9 +37,14 @@ const findCustomModel = (
 /**
  * Resolve whether the active model can consume image parts.
  *
- * - Custom providers: trust the user-configured `vision` flag on that model.
- * - Otherwise: ask the AI SDK LanguageModel via `supportedUrls` for `image` / `image/*`.
- * - If the SDK does not advertise images, fall back to catalogMeta.vision.
+ * 1. Custom providers: trust the user-configured `vision` flag.
+ * 2. Catalog meta (`models.catalogMeta`), from gateway tags / OpenRouter
+ *    `input_modalities`, when the field is an explicit boolean.
+ * 3. models.dev `modalities.input` (image), when the lookup is definite.
+ * 4. SDK `supportedUrls` only for concrete `image` / `image/<type>` keys.
+ *    Ignore star-slash-star and `image/*` wildcards (gateway and openai
+ *    advertise those for every model).
+ * 5. Default false.
  */
 export default async (args: {
   model: LanguageModel
@@ -47,14 +57,25 @@ export default async (args: {
     return custom.vision === true
   }
 
-  if (await hasImageSupportedUrls(args.model)) {
+  const catalogVision = getModelCatalogMeta(args.settings, {
+    providerId: args.providerId,
+    modelId: args.modelId,
+  }).vision
+  if (typeof catalogVision === 'boolean') {
+    return catalogVision
+  }
+
+  const modelsDev = await resolveModelsDevVision({
+    providerId: args.providerId,
+    modelId: args.modelId,
+  })
+  if (typeof modelsDev === 'boolean') {
+    return modelsDev
+  }
+
+  if (await hasConcreteImageSupportedUrls(args.model)) {
     return true
   }
 
-  return (
-    getModelCatalogMeta(args.settings, {
-      providerId: args.providerId,
-      modelId: args.modelId,
-    }).vision === true
-  )
+  return false
 }

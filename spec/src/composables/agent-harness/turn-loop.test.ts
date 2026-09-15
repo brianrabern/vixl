@@ -432,6 +432,33 @@ describe('idle queue drain', () => {
     )
   })
 
+  it('replays appendedUserMessageId when draining a deferred persist', async () => {
+    const state = buildState()
+    state.status.value = 'streaming'
+    vi.mocked(state.messageQueue.take)
+      .mockReturnValueOnce({
+        ...queuedItem,
+        skipUserMessage: true,
+        skipUserPersist: true,
+        appendedUserMessageId: 'user-msg-1',
+      })
+      .mockReturnValue(undefined)
+    createTurnLoop(state, buildAttention(state), loopDeps())
+
+    state.status.value = 'ready'
+    await nextTick()
+
+    expect(sendFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'queued',
+        internal: true,
+        skipUserMessage: true,
+        skipUserPersist: true,
+        appendedUserMessageId: 'user-msg-1',
+      }),
+    )
+  })
+
   it('replays skipUserPersist when draining a deferred retry', async () => {
     const state = buildState()
     state.status.value = 'streaming'

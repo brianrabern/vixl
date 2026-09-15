@@ -199,15 +199,32 @@ export function usePromptInputProvider(props: {
     try {
       isLoading.value = true
       // Process files (convert blobs to base64 if needed for AI SDK)
-      const processedFiles = await Promise.all(
+      const converted = await Promise.all(
         submittedFiles.map(async (item) => {
           if (item.url && item.url.startsWith('blob:')) {
             const dataUrl = await convertBlobUrlToDataUrl(item.url)
-            return { ...item, url: dataUrl ?? item.url }
+            if (!dataUrl) {
+              return null
+            }
+            return { ...item, url: dataUrl }
           }
           return item
         }),
       )
+      const processedFiles = converted.filter(
+        (item): item is AttachmentFile => item !== null,
+      )
+
+      if (processedFiles.length < submittedFiles.length) {
+        props.onError?.({
+          code: 'submit_error',
+          message: 'Could not attach image. The preview expired. Try attaching it again.',
+        })
+      }
+
+      if (!submittedText.trim() && processedFiles.length === 0) {
+        return
+      }
 
       const message = {
         text: submittedText,

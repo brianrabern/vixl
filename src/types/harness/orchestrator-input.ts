@@ -21,6 +21,7 @@ export type OrchestratorInput = {
   messages: UIMessage[]
   timeline?: ChatTimelineItem[]
   userText: string
+  appendedUserMessageId?: string
   mentions: ContextMention[]
   signal: AbortSignal
   onEvent: (event: HarnessEvent) => void | Promise<void>

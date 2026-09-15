@@ -13,4 +13,5 @@ export interface QueuedChatMessage {
   mentions?: ContextMention[]
   skipUserMessage?: boolean
   skipUserPersist?: boolean
+  appendedUserMessageId?: string
 }
