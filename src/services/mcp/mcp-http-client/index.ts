@@ -11,7 +11,6 @@ export { stopHttpServer, markHttpAuthRequired, logoutHttpServer } from './stop'
 export {
   listHttpResources,
   readHttpResource,
-  listHttpPrompts,
   getHttpPrompt,
   callHttpTool,
   getHttpState,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::rpc::{json_rpc, list_tools_internal};
 use super::spawn::mcp_stop;
 use super::types::{
-    mcp_connection_key, set_state, McpServerState, McpToolInfo, MCP_PROCESSES, MCP_STATES,
+    mcp_connection_key, set_state, McpServerState, MCP_PROCESSES, MCP_STATES,
 };
 
 fn resolved_scope_key(scope_key: Option<&str>) -> String {
@@ -91,15 +91,6 @@ pub async fn mcp_logout(server_id: String, scope_key: Option<String>) -> Result<
     )
     .await;
     Ok(())
-}
-
-#[tauri::command]
-pub async fn mcp_list_tools(
-    server_id: String,
-    scope_key: Option<String>,
-) -> Result<Vec<McpToolInfo>, String> {
-    let state = mcp_status(server_id, scope_key).await?;
-    Ok(state.tools)
 }
 
 async fn sync_process_liveness(connection_key: &str) -> Option<McpServerState> {

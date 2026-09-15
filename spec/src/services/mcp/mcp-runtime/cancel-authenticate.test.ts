@@ -48,7 +48,6 @@ vi.mock('@/services/mcp/mcp-http-client', () => ({
   getHttpPrompt: vi.fn<(...args: unknown[]) => unknown>(),
   getHttpState: vi.fn<(...args: unknown[]) => unknown>(),
   hasHttpServer: vi.fn<(...args: unknown[]) => boolean>(() => false),
-  listHttpPrompts: vi.fn<(...args: unknown[]) => unknown>(),
   listHttpResources: vi.fn<(...args: unknown[]) => unknown>(),
   listHttpStates: vi.fn<(...args: unknown[]) => Record<string, never>>(() => ({})),
   markHttpAuthRequired: vi.fn<(...args: unknown[]) => void>(),

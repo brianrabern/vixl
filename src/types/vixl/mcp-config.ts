@@ -48,13 +48,6 @@ export type McpServerStatus =
   | 'auth_required'
   | 'refreshing'
 
-export type McpToolDescriptor = {
-  name: string
-  description?: string
-  inputSchema?: Record<string, unknown>
-  meta?: Record<string, unknown>
-}
-
 export const isMcpStdioServer = (
   config: McpServerConfig,
 ): config is McpStdioServer => 'command' in config

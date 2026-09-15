@@ -4,7 +4,6 @@ import {
   cancelAuthenticate,
   getPrompt,
   getStatus,
-  listPrompts,
   listResources,
   listStatuses,
   readResource,
@@ -25,7 +24,6 @@ const mcpRuntime = {
   getStatus,
   listResources,
   readResource,
-  listPrompts,
   getPrompt,
 }
 

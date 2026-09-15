@@ -25,17 +25,6 @@ export const readHttpResource = async (
   return entry.client.readResource({ uri })
 }
 
-export const listHttpPrompts = async (
-  serverId: string,
-  scopeKey?: string | null,
-): Promise<unknown> => {
-  const entry = httpServers.get(connectionKey(scopeKey, serverId))
-  if (!entry?.client) {
-    throw new Error('Server not running')
-  }
-  return entry.client.experimental_listPrompts()
-}
-
 export const getHttpPrompt = async (
   serverId: string,
   name: string,

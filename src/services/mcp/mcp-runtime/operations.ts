@@ -5,7 +5,6 @@ import {
   getHttpPrompt,
   getHttpState,
   hasHttpServer,
-  listHttpPrompts,
   listHttpResources,
   listHttpStates,
   markHttpAuthRequired,
@@ -269,16 +268,6 @@ export const readResource = async (
     throw new Error('MCP resources require a connected HTTP or SSE server')
   }
   return readHttpResource(serverId, uri, scopeKey)
-}
-
-export const listPrompts = async (
-  serverId: string,
-  scopeKey?: string | null,
-): Promise<unknown> => {
-  if (!hasHttpServer(serverId, scopeKey)) {
-    throw new Error('MCP prompts require a connected HTTP or SSE server')
-  }
-  return listHttpPrompts(serverId, scopeKey)
 }
 
 export const getPrompt = async (
