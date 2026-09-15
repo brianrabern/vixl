@@ -48,7 +48,7 @@ const buildTerminalTheme = (): ITheme => {
   const foreground = readCssVariable('--foreground')
   const accent = readCssVariable('--accent')
   const accentForeground = readCssVariable('--accent-foreground')
-  const background = transparencyEnabled.value ? 'transparent' : backgroundToken
+  const background = transparencyEnabled.value ? '#00000000' : backgroundToken
 
   return {
     background,

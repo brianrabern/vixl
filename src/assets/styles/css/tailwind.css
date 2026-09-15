@@ -177,3 +177,12 @@ html.transparency-on {
   /* Chat composer: translucent so native blur and tint show through. */
   --composer-fill: color-mix(in oklab, var(--background) 60%, transparent);
 }
+
+/*
+ * xterm.css paints .xterm-viewport opaque black for scrollbar opacity.
+ * Under glass the terminal surface must be fully transparent so the pane
+ * shows window vibrancy edge to edge.
+ */
+html.transparency-on .xterm .xterm-viewport {
+  background-color: transparent;
+}
