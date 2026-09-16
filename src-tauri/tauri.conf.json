@@ -21,7 +21,8 @@
         "fullscreen": false,
         "decorations": false,
         "hiddenTitle": true,
-        "transparent": true
+        "transparent": true,
+        "dragDropEnabled": false
       }
     ],
     "macOSPrivateApi": true,
