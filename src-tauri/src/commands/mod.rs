@@ -1,4 +1,5 @@
 pub mod chat;
+pub mod clipboard;
 pub mod codegraph;
 pub mod config;
 pub mod file_checkpoint;
@@ -28,6 +29,7 @@ pub use chat::{
     move_chat_to_workspace, pin_chat, read_chat_messages, read_chat_meta, read_chat_usage,
     truncate_chat_log, update_chat_meta, write_chat_usage,
 };
+pub use clipboard::read_clipboard_image_png;
 pub use codegraph::{codegraph_cli, codegraph_store_stat, delete_graph, list_graphs};
 pub use config::{
     config_exists, read_json_file, read_lsp_config, read_mcp_config, read_settings,

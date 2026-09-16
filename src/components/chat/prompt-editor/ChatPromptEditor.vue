@@ -45,6 +45,7 @@ const { textInput, setTextInput, addFiles, files, removeFile } = usePromptInput(
 const contextBudgetSync = useChatContextBudgetSync()
 const chatPromptEditor = useChatPromptEditor()
 const slashIndex = useSlashIndex(() => props.projectRoot ?? null)
+const { readNativeClipboardImage } = useNativeClipboardImage()
 
 const isComposing = ref(false)
 const suggestionOpen = ref(false)
@@ -98,12 +99,56 @@ const insertPlainText = (text: string): void => {
   current.chain().focus('end').insertContent(`${prefix}${trimmed} `).run()
 }
 
+const insertCapturedPasteText = (plainText: string): void => {
+  const current = editor.value
+  if (!current || !plainText) {
+    return
+  }
+
+  const paragraphs = plainTextToDoc(plainText).content ?? []
+  const chain = current.chain().focus()
+  paragraphs.forEach((paragraph, index) => {
+    if (index > 0) {
+      chain.splitBlock()
+    }
+    const nodes = paragraph.content
+    if (nodes && nodes.length > 0) {
+      chain.insertContent(nodes)
+    }
+  })
+  chain.run()
+}
+
+const insertCapturedPasteHtml = (html: string): void => {
+  const current = editor.value
+  if (!current || !html) {
+    return
+  }
+  current.chain().focus().insertContent(html).run()
+}
+
 const closeSuggestion = (): void => {
   suggestionUnmount?.()
   suggestionUnmount = null
   suggestionRenderer?.destroy()
   suggestionRenderer = null
   suggestionOpen.value = false
+}
+
+const handleNativeClipboardImagePaste = async (): Promise<boolean> => {
+  try {
+    const file = await readNativeClipboardImage()
+    if (!file) {
+      return false
+    }
+    addFiles([file])
+    return true
+  } catch (error) {
+    toast.error('Could not read image from clipboard', {
+      description: formatUnknownError(error),
+    })
+    throw error
+  }
 }
 
 const fileSuggestionListProps = (suggestionProps: {
@@ -278,25 +323,120 @@ const editor = useEditor({
       return false
     },
     handlePaste: (_view, event) => {
-      const clipboardItems = event.clipboardData?.items
-      if (!clipboardItems) {
-        return false
-      }
-      const pastedFiles: File[] = []
-      for (const item of Array.from(clipboardItems)) {
-        if (item.kind === 'file') {
-          const file = item.getAsFile()
-          if (file) {
-            pastedFiles.push(file)
+      try {
+        const clipboardData = event.clipboardData
+        const clipboardItems = clipboardData?.items
+        const plainText = clipboardData?.getData('text/plain') ?? ''
+        const htmlText = clipboardData?.getData('text/html') ?? ''
+
+        const fileKindItems = clipboardItems
+          ? Array.from(clipboardItems).filter((item) => item.kind === 'file')
+          : []
+
+        let pastedFiles: File[] = []
+
+        if (fileKindItems.length > 0) {
+          event.preventDefault()
+          for (const item of fileKindItems) {
+            const file = item.getAsFile()
+            if (file) {
+              pastedFiles.push(file)
+            }
           }
         }
-      }
-      if (pastedFiles.length > 0) {
+
+        if (pastedFiles.length === 0) {
+          pastedFiles = Array.from(clipboardData?.files ?? [])
+          if (pastedFiles.length > 0 && fileKindItems.length === 0) {
+            event.preventDefault()
+          }
+        }
+
+        const usableFiles = pastedFiles.filter((file) => file.size > 0)
+        if (usableFiles.length > 0) {
+          addFiles(usableFiles)
+          return true
+        }
+
+        const hadClipboardFiles = (clipboardData?.files.length ?? 0) > 0
+        if (fileKindItems.length > 0 || hadClipboardFiles) {
+          handleNativeClipboardImagePaste()
+            .then((added) => {
+              if (!added) {
+                insertCapturedPasteText(plainText)
+                if (!plainText) {
+                  toast.error('Could not read image from clipboard', {
+                    description: 'The clipboard item could not be converted to a file',
+                  })
+                }
+              }
+            })
+            .catch(() => {
+              // helper already toasted unexpected clipboard errors
+              insertCapturedPasteText(plainText)
+              return
+            })
+          return true
+        }
+
+        const stringKindItems = clipboardItems
+          ? Array.from(clipboardItems).filter((item) => item.kind === 'string')
+          : []
+        if (stringKindItems.length === 0) {
+          event.preventDefault()
+          handleNativeClipboardImagePaste()
+            .then((added) => {
+              if (!added) {
+                insertCapturedPasteText(plainText)
+              }
+            })
+            .catch(() => {
+              // helper already toasted unexpected clipboard errors
+              insertCapturedPasteText(plainText)
+              return
+            })
+          return true
+        }
+
+        const clipboardHasImageHtml = htmlText.toLowerCase().includes('<img')
+        if (!clipboardHasImageHtml && (plainText || htmlText)) {
+          return false
+        }
+
         event.preventDefault()
-        addFiles(pastedFiles)
+        handleNativeClipboardImagePaste()
+          .then((added) => {
+            if (added) {
+              // Insert the text only when it is real accompanying content, not a
+              // markup fragment (image URL or alt text) already inside the HTML.
+              const isMarkupFragment = plainText.trim().length > 0 && htmlText.includes(plainText.trim())
+              if (plainText.trim().length > 0 && !isMarkupFragment) {
+                insertCapturedPasteText(plainText)
+              }
+              return
+            }
+            if (plainText) {
+              insertCapturedPasteText(plainText)
+            } else {
+              insertCapturedPasteHtml(htmlText)
+            }
+          })
+          .catch(() => {
+            // helper already toasted unexpected clipboard errors
+            if (plainText) {
+              insertCapturedPasteText(plainText)
+            } else {
+              insertCapturedPasteHtml(htmlText)
+            }
+            return
+          })
         return true
+      } catch (error) {
+        toast.error('Paste failed', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
+        return false
       }
-      return false
     },
   },
   onUpdate: ({ editor: current }) => {

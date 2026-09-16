@@ -269,6 +269,7 @@
     "useMouseInElement": true,
     "useMousePressed": true,
     "useMutationObserver": true,
+    "useNativeClipboardImage": true,
     "useNavigatorLanguage": true,
     "useNetwork": true,
     "useNow": true,

@@ -23,6 +23,7 @@
     "dialog:default",
     "mcp-bridge:default",
     "updater:default",
-    "process:default"
+    "process:default",
+    "clipboard-manager:allow-read-image"
   ]
 }

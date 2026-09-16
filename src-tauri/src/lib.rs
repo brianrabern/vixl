@@ -26,7 +26,8 @@ use commands::{
     move_chat_to_workspace, oauth_begin_loopback, oauth_cancel_loopback, open_external_url,
     open_project_at_path, open_project_at_path_command, pin_chat, read_chat_messages,
     read_chat_meta, read_chat_usage, read_json_file, read_lsp_config, read_mcp_config,
-    read_settings, registry_add_project, registry_list_projects, registry_remove_project,
+    read_clipboard_image_png, read_settings, registry_add_project, registry_list_projects,
+    registry_remove_project,
     registry_set_active_project, registry_update_project_root, resolve_launch_path,
     reveal_in_folder, set_mcp_server_enabled, set_secret, shell_kill_pty, shell_kill_tracked,
     shell_resize_pty, shell_spawn_pty, shell_spawn_tracked, shell_write_pty, truncate_chat_log,
@@ -50,7 +51,8 @@ pub fn run_with_launch_path(launch_path: Option<String>) {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
 
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
@@ -137,6 +139,7 @@ pub fn run_with_launch_path(launch_path: Option<String>) {
         http_proxy_stream,
         http_proxy_stream_cancel,
         web_fetch,
+        read_clipboard_image_png,
         reveal_in_folder,
         git_repo_info,
         git_list_branches,
