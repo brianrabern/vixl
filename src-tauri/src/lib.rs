@@ -228,9 +228,14 @@ pub fn run_with_launch_path(launch_path: Option<String>) {
         clear_window_vibrancy,
     ]);
 
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Opened { urls } = event {
+            launch::handle_opened_urls(app_handle, urls);
+        }
+    });
 }
 
 #[cfg(target_os = "macos")]

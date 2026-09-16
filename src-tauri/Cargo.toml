@@ -48,6 +48,7 @@ zip = "2"
 xz2 = "0.1"
 which = "8.0.5"
 sha2 = "0.10.9"
+dunce = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 ignore = "0.4"
 grep-regex = "0.1"

@@ -95,8 +95,8 @@ fn roots_match(left: &str, right: &str) -> bool {
         return true;
     }
     match (
-        Path::new(left).canonicalize(),
-        Path::new(right).canonicalize(),
+        dunce::canonicalize(Path::new(left)),
+        dunce::canonicalize(Path::new(right)),
     ) {
         (Ok(left_canonical), Ok(right_canonical)) => left_canonical == right_canonical,
         _ => false,
@@ -104,8 +104,7 @@ fn roots_match(left: &str, right: &str) -> bool {
 }
 
 fn normalize_root_path(root_path: String) -> String {
-    Path::new(&root_path)
-        .canonicalize()
+    dunce::canonicalize(&root_path)
         .map(|path| path.to_string_lossy().to_string())
         .unwrap_or(root_path)
 }
@@ -155,8 +154,7 @@ pub fn resolve_launch_path(path_arg: &str) -> Result<PathBuf, String> {
             .join(path)
     };
 
-    let canonical = absolute
-        .canonicalize()
+    let canonical = dunce::canonicalize(&absolute)
         .map_err(|e| format!("Failed to resolve path {path_arg}: {e}"))?;
 
     if !canonical.is_dir() {

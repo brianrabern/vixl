@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use uuid::Uuid;
 
-use super::{unique_project_slug, upsert_fleet_project, FleetProject};
+use super::{normalize_root_path, unique_project_slug, upsert_fleet_project, FleetProject};
 
 struct TempRoot {
     path: PathBuf,
@@ -89,4 +89,26 @@ fn upsert_create_new_assigns_unique_slug() {
     assert_eq!(first.slug, "game");
     assert_eq!(second.slug, "game-2");
     assert_eq!(projects.len(), 2);
+}
+
+#[test]
+fn normalize_root_path_strips_trailing_slash() {
+    let root = TempRoot::new("slash");
+    let with_slash = format!("{}{}", root.path.display(), std::path::MAIN_SEPARATOR);
+    let normalized = normalize_root_path(with_slash);
+    assert!(
+        !normalized.ends_with('/') && !normalized.ends_with('\\'),
+        "normalized path should not end with a slash: {normalized}"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn normalize_root_path_drops_windows_verbatim_prefix() {
+    let root = TempRoot::new("verbatim");
+    let normalized = normalize_root_path(root.path.to_string_lossy().to_string());
+    assert!(
+        !normalized.starts_with(r"\\?\"),
+        "normalized path should not use a verbatim prefix: {normalized}"
+    );
 }
