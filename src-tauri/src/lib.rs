@@ -232,8 +232,13 @@ pub fn run_with_launch_path(launch_path: Option<String>) {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
     app.run(|app_handle, event| {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         if let tauri::RunEvent::Opened { urls } = event {
             launch::handle_opened_urls(app_handle, urls);
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        {
+            let _ = (app_handle, event);
         }
     });
 }
