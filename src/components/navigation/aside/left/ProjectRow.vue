@@ -252,7 +252,7 @@ const handleOpenTerminal = async (): Promise<void> => {
             <Button
               variant="ghost"
               size="icon"
-              class="size-6"
+              class="size-5"
               :disabled="startingChat"
               :aria-label="`New chat in ${project.displayName}`"
               @click.stop="handleStartChat"
