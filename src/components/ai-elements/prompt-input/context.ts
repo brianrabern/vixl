@@ -1,6 +1,7 @@
 import type { AttachmentFile, PromptInputContext, PromptInputMessage } from './types'
 import { nanoid } from 'nanoid'
 import { inject, onBeforeUnmount, provide, ref } from 'vue'
+import detachFileBytes from '@/utils/detach-file-bytes'
 import { PROMPT_INPUT_KEY } from './types'
 
 export function usePromptInputProvider(props: {
@@ -15,6 +16,8 @@ export function usePromptInputProvider(props: {
   const files = ref<AttachmentFile[]>([])
   const fileInputRef = ref<HTMLInputElement | null>(null)
   const isLoading = ref(false)
+  const pendingAttaches = new Set<Promise<void>>()
+  let attachEpoch = 0
 
   const revokeObjectUrl = (file: AttachmentFile) => {
     if (file.url && file.url.startsWith('blob:')) {
@@ -95,43 +98,78 @@ export function usePromptInputProvider(props: {
     return 'image/png'
   }
 
-  const addFiles = (incoming: File[] | FileList) => {
-    const fileList = Array.from(incoming)
+  const addFiles = (incoming: File[] | FileList): Promise<void> => {
+    const operation = (async (): Promise<void> => {
+      const epoch = attachEpoch
+      try {
+        const fileList = Array.from(incoming)
 
-    // Validate Accept
-    const accepted = fileList.filter(matchesAccept)
-    if (fileList.length && accepted.length === 0) {
-      props.onError?.({ code: 'accept', message: 'No files match the accepted types.' })
-      return
-    }
+        // Validate Accept
+        const accepted = fileList.filter(matchesAccept)
+        if (fileList.length && accepted.length === 0) {
+          props.onError?.({ code: 'accept', message: 'No files match the accepted types.' })
+          return
+        }
 
-    // Validate Size
-    const withinSize = (f: File) => (props.maxFileSize ? f.size <= props.maxFileSize : true)
-    const sized = accepted.filter(withinSize)
-    if (accepted.length > 0 && sized.length === 0) {
-      props.onError?.({ code: 'max_file_size', message: 'All files exceed the maximum size.' })
-      return
-    }
+        // Validate Size
+        const withinSize = (f: File) => (props.maxFileSize ? f.size <= props.maxFileSize : true)
+        const sized = accepted.filter(withinSize)
+        if (accepted.length > 0 && sized.length === 0) {
+          props.onError?.({ code: 'max_file_size', message: 'All files exceed the maximum size.' })
+          return
+        }
 
-    // Validate Count
-    const currentCount = files.value.length
-    const capacity = props.maxFiles ? Math.max(0, props.maxFiles - currentCount) : undefined
-    const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized
+        // Validate Count
+        const currentCount = files.value.length
+        const capacity = props.maxFiles ? Math.max(0, props.maxFiles - currentCount) : undefined
+        const capped = typeof capacity === 'number' ? sized.slice(0, capacity) : sized
 
-    if (typeof capacity === 'number' && sized.length > capacity) {
-      props.onError?.({ code: 'max_files', message: 'Too many files. Some were not added.' })
-    }
+        if (typeof capacity === 'number' && sized.length > capacity) {
+          props.onError?.({ code: 'max_files', message: 'Too many files. Some were not added.' })
+        }
 
-    const newAttachments: AttachmentFile[] = capped.map(file => ({
-      id: nanoid(),
-      type: 'file',
-      url: URL.createObjectURL(file),
-      mediaType: inferMediaType(file),
-      filename: file.name || 'image.png',
-      file,
-    }))
+        const detachedOrNull = await Promise.all(
+          capped.map(async (file) => {
+            try {
+              return await detachFileBytes(file)
+            }
+            catch {
+              props.onError?.({
+                code: 'attach_read_failed',
+                message: 'Could not read the attached file. Try attaching it again.',
+              })
+              return null
+            }
+          }),
+        )
+        const detached = detachedOrNull.filter((file): file is File => file !== null)
 
-    files.value = [...files.value, ...newAttachments]
+        if (epoch !== attachEpoch) {
+          return
+        }
+
+        const newAttachments: AttachmentFile[] = detached.map(file => ({
+          id: nanoid(),
+          type: 'file',
+          url: URL.createObjectURL(file),
+          mediaType: inferMediaType(file),
+          filename: file.name || 'image.png',
+          file,
+        }))
+
+        files.value = [...files.value, ...newAttachments]
+      }
+      catch {
+        props.onError?.({
+          code: 'attach_read_failed',
+          message: 'Could not read the attached file. Try attaching it again.',
+        })
+      }
+    })()
+    pendingAttaches.add(operation)
+    return operation.finally(() => {
+      pendingAttaches.delete(operation)
+    })
   }
 
   const removeFile = (id: string) => {
@@ -142,6 +180,7 @@ export function usePromptInputProvider(props: {
   }
 
   const clearFiles = () => {
+    attachEpoch += 1
     revokeObjectUrls(files.value)
     files.value = []
   }
@@ -172,16 +211,20 @@ export function usePromptInputProvider(props: {
     fileInputRef.value?.click()
   }
 
+  const convertBlobToDataUrl = (blob: Blob): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null)
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  }
+
   const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
     try {
       const response = await fetch(url)
       const blob = await response.blob()
-      return new Promise((resolve) => {
-        const reader = new FileReader()
-        reader.onloadend = () => resolve(reader.result as string)
-        reader.onerror = () => resolve(null)
-        reader.readAsDataURL(blob)
-      })
+      return convertBlobToDataUrl(blob)
     }
     catch {
       return null
@@ -192,6 +235,9 @@ export function usePromptInputProvider(props: {
     if (!props.onSubmit)
       return
 
+    const inFlight = [...pendingAttaches]
+    await Promise.all(inFlight)
+
     const submittedText = textInput.value
     const submittedFiles = [...files.value]
     const submittedIds = new Set(submittedFiles.map(file => file.id))
@@ -201,6 +247,13 @@ export function usePromptInputProvider(props: {
       // Process files (convert blobs to base64 if needed for AI SDK)
       const converted = await Promise.all(
         submittedFiles.map(async (item) => {
+          if (item.file) {
+            const dataUrl = await convertBlobToDataUrl(item.file)
+            if (!dataUrl) {
+              return null
+            }
+            return { ...item, url: dataUrl }
+          }
           if (item.url && item.url.startsWith('blob:')) {
             const dataUrl = await convertBlobUrlToDataUrl(item.url)
             if (!dataUrl) {

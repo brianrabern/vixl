@@ -42,7 +42,7 @@ export default () => {
       toast.error('Some attachments could not be restored')
     }
 
-    addFiles(restored)
+    await addFiles(restored)
   }
 
   return {

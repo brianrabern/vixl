@@ -17,7 +17,7 @@ export interface PromptInputContext {
   isLoading: Ref<boolean>
   fileInputRef: Ref<HTMLInputElement | null>
   setTextInput: (val: string) => void
-  addFiles: (files: File[] | FileList) => void
+  addFiles: (files: File[] | FileList) => Promise<void>
   removeFile: (id: string) => void
   clearFiles: () => void
   clearInput: () => void
