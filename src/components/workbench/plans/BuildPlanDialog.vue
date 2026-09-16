@@ -14,10 +14,16 @@ import {
 import resolveModelForRole from '@/services/models/resolve-model-for-role'
 import listConfiguredProviders from '@/services/providers/list-configured-providers'
 
-const props = defineProps<{
-  open: boolean
-  disabled?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    disabled?: boolean
+    freshChat?: boolean
+  }>(),
+  {
+    freshChat: false,
+  },
+)
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
@@ -29,7 +35,7 @@ const emit = defineEmits<{
 
 const config = useVixlConfig()
 const model = ref('')
-const freshChat = ref(false)
+const freshChatChecked = ref(false)
 
 const settings = computed(() => config.effectiveSettings.value)
 
@@ -44,9 +50,15 @@ const canConfirm = computed(
     !props.disabled,
 )
 
+const dialogTitle = computed(() =>
+  props.freshChat ? 'Build plan in new chat' : 'Build plan',
+)
+
+const showFreshChatCheckbox = computed(() => !props.freshChat)
+
 const syncDefaults = (): void => {
   model.value = resolveModelForRole('agent', settings.value) ?? ''
-  freshChat.value = false
+  freshChatChecked.value = props.freshChat
 }
 
 watch(
@@ -76,7 +88,7 @@ const handleConfirm = (): void => {
   }
   emit('confirm', {
     model: model.value.trim(),
-    freshChat: freshChat.value,
+    freshChat: freshChatChecked.value,
   })
   emit('update:open', false)
 }
@@ -86,7 +98,7 @@ const handleConfirm = (): void => {
   <Dialog :open="open" @update:open="handleOpenChange">
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
-        <DialogTitle>Build plan</DialogTitle>
+        <DialogTitle>{{ dialogTitle }}</DialogTitle>
       </DialogHeader>
       <div class="space-y-4 py-2">
         <div class="space-y-2">
@@ -100,10 +112,10 @@ const handleConfirm = (): void => {
             @update:model-value="handleModelChange"
           />
         </div>
-        <div class="flex items-center gap-2">
+        <div v-if="showFreshChatCheckbox" class="flex items-center gap-2">
           <Checkbox
             id="build-plan-fresh-chat"
-            v-model="freshChat"
+            v-model="freshChatChecked"
             :disabled="disabled"
           />
           <Label for="build-plan-fresh-chat">
