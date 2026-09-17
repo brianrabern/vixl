@@ -104,48 +104,52 @@ const pills = computed(() => {
 </script>
 
 <template>
-  <ChatChatPanelContextMenu
-    :project-slug="projectSlug"
-    :chat-id="chatId"
-  >
-    <!--
-      Always host the ring on the chat column titlebar band. Parent main uses
-      pt-(--titlebar-height). z-51 sits above the titlebar drag region; the
-      sidebar trigger uses z-52 so it stays clickable when the workbench is closed.
-    -->
-    <div
-      v-if="contextActions.available.value"
-      class="pointer-events-none absolute inset-x-0 top-0 z-[51] flex h-(--titlebar-height) -translate-y-full items-center justify-end"
-      :class="workbench.rightSidebarOpen.value ? 'pr-2' : 'pr-12'"
-      style="--titlebar-height: 40px"
-    >
-      <div class="pointer-events-auto flex items-center gap-2" data-tauri-drag-region="false">
-        <ChatCodegraphStatusChip />
-        <ChatContextUsageBar />
-      </div>
+  <div class="relative flex h-full min-h-0 flex-col">
+    <div class="relative flex min-h-0 flex-1 flex-col">
+      <ChatChatPanelContextMenu
+        :project-slug="projectSlug"
+        :chat-id="chatId"
+      >
+        <!--
+          Always host the ring on the chat column titlebar band. Parent main uses
+          pt-(--titlebar-height). z-51 sits above the titlebar drag region; the
+          sidebar trigger uses z-52 so it stays clickable when the workbench is closed.
+        -->
+        <div
+          v-if="contextActions.available.value"
+          class="pointer-events-none absolute inset-x-0 top-0 z-[51] flex h-(--titlebar-height) -translate-y-full items-center justify-end"
+          :class="workbench.rightSidebarOpen.value ? 'pr-2' : 'pr-12'"
+          style="--titlebar-height: 40px"
+        >
+          <div class="pointer-events-auto flex items-center gap-2" data-tauri-drag-region="false">
+            <ChatCodegraphStatusChip />
+            <ChatContextUsageBar />
+          </div>
+        </div>
+        <ChatThread
+          :key="threadKey"
+          class="min-h-0 flex-1"
+          :timeline="timeline"
+          :status="harnessStatus"
+          :pending-approvals="isSubagentView ? [] : harnessPendingApprovals"
+          :pending-question="isSubagentView ? null : pendingQuestion"
+          :pending-mcp-auth="isSubagentView ? [] : harnessPendingMcpAuth"
+          :personal-mcp="mcpPersonalConfig"
+          :project-mcp="mcpProjectConfig"
+          :read-only="isSubagentView"
+          :compacting="compacting"
+          @resolve-approval="handleResolveApproval"
+          @submit-answer="handleSubmitAnswer"
+          @authenticate-mcp="handleAuthenticateMcp"
+          @skip-mcp-auth="handleSkipMcpAuth"
+          @open-mcp-settings="handleOpenMcpSettings"
+          @secrets-saved-mcp="(toolCallId) => handleSecretsSavedMcp(toolCallId)"
+          @retry="handleRetry"
+          @restore-files="handleRestoreFiles"
+          @stop-subagent="handleStopSubagent"
+        />
+      </ChatChatPanelContextMenu>
     </div>
-    <ChatThread
-      :key="threadKey"
-      class="min-h-0 flex-1"
-      :timeline="timeline"
-      :status="harnessStatus"
-      :pending-approvals="isSubagentView ? [] : harnessPendingApprovals"
-      :pending-question="isSubagentView ? null : pendingQuestion"
-      :pending-mcp-auth="isSubagentView ? [] : harnessPendingMcpAuth"
-      :personal-mcp="mcpPersonalConfig"
-      :project-mcp="mcpProjectConfig"
-      :read-only="isSubagentView"
-      :compacting="compacting"
-      @resolve-approval="handleResolveApproval"
-      @submit-answer="handleSubmitAnswer"
-      @authenticate-mcp="handleAuthenticateMcp"
-      @skip-mcp-auth="handleSkipMcpAuth"
-      @open-mcp-settings="handleOpenMcpSettings"
-      @secrets-saved-mcp="(toolCallId) => handleSecretsSavedMcp(toolCallId)"
-      @retry="handleRetry"
-      @restore-files="handleRestoreFiles"
-      @stop-subagent="handleStopSubagent"
-    />
     <ChatFilePolicyDialog
       v-model:open="filePolicyOpen"
       :title="filePolicyTitle"
@@ -214,5 +218,5 @@ const pills = computed(() => {
         />
       </div>
     </div>
-  </ChatChatPanelContextMenu>
+  </div>
 </template>

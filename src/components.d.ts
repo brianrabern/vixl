@@ -88,6 +88,7 @@ declare module 'vue' {
     ChatPromptEditor: typeof import('./components/chat/prompt-editor/ChatPromptEditor.vue')['default']
     ChatPromptEditSync: typeof import('./components/chat/ChatPromptEditSync.vue')['default']
     ChatPromptInput: typeof import('./components/chat/ChatPromptInput.vue')['default']
+    ChatPromptInputContextMenu: typeof import('./components/chat/ChatPromptInputContextMenu.vue')['default']
     ChatPromptMentionSync: typeof import('./components/chat/ChatPromptMentionSync.vue')['default']
     ChatQuestionCard: typeof import('./components/chat/ChatQuestionCard.vue')['default']
     ChatQueueHandlers: typeof import('./components/chat/ChatQueueHandlers.vue')['default']

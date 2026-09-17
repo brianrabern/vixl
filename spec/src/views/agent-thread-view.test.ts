@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
-import { shallowMount } from '@vue/test-utils'
+import { shallowMount, type VueWrapper } from '@vue/test-utils'
 
 vi.hoisted(() => {
   Object.defineProperty(document, 'queryCommandSupported', {
@@ -93,19 +93,33 @@ vi.mock('@/composables/agent-thread-view', () => ({
 
 import AgentThreadView from '@/views/AgentThreadView.vue'
 
+const panelMenuStub = {
+  name: 'ChatChatPanelContextMenu',
+  template: '<div data-testid="panel-context-menu"><slot /></div>',
+}
+
+const mountView = () =>
+  shallowMount(AgentThreadView, {
+    global: {
+      stubs: {
+        ChatChatPanelContextMenu: panelMenuStub,
+      },
+    },
+  })
+
+const expectPromptOutsidePanelMenu = (wrapper: VueWrapper): void => {
+  const panelMenu = wrapper.findComponent({ name: 'ChatChatPanelContextMenu' })
+  expect(wrapper.findComponent({ name: 'ChatPromptInput' }).exists()).toBe(true)
+  expect(panelMenu.exists()).toBe(true)
+  expect(panelMenu.find('[data-testid="panel-context-menu"]').exists()).toBe(true)
+  expect(panelMenu.findComponent({ name: 'ChatPromptInput' }).exists()).toBe(false)
+  expect(panelMenu.findComponent({ name: 'ChatThread' }).exists()).toBe(true)
+}
+
 describe('AgentThreadView subagent composer', () => {
   it('renders ChatPromptInput in the subagent view without approvals chrome', () => {
     viewState.isSubagentView = true
-    const wrapper = shallowMount(AgentThreadView, {
-      global: {
-        stubs: {
-          ChatChatPanelContextMenu: {
-            name: 'ChatChatPanelContextMenu',
-            template: '<div><slot /></div>',
-          },
-        },
-      },
-    })
+    const wrapper = mountView()
 
     const prompt = wrapper.findComponent({ name: 'ChatPromptInput' })
     expect(prompt.exists()).toBe(true)
@@ -116,27 +130,20 @@ describe('AgentThreadView subagent composer', () => {
     )
     expect(wrapper.findComponent({ name: 'ChatTodoTimeline' }).exists()).toBe(false)
     expect(wrapper.findComponent({ name: 'ChatMessageQueue' }).exists()).toBe(false)
+    expectPromptOutsidePanelMenu(wrapper)
     wrapper.unmount()
   })
 
   it('renders parent composer chrome when not in the subagent view', () => {
     viewState.isSubagentView = false
-    const wrapper = shallowMount(AgentThreadView, {
-      global: {
-        stubs: {
-          ChatChatPanelContextMenu: {
-            name: 'ChatChatPanelContextMenu',
-            template: '<div><slot /></div>',
-          },
-        },
-      },
-    })
+    const wrapper = mountView()
 
     expect(wrapper.findComponent({ name: 'ChatPromptInput' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'ChatPendingApprovals' }).exists()).toBe(
       true,
     )
     expect(wrapper.findComponent({ name: 'ChatStackPillBar' }).exists()).toBe(true)
+    expectPromptOutsidePanelMenu(wrapper)
     wrapper.unmount()
   })
 })

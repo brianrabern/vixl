@@ -554,7 +554,8 @@ watch(
     </div>
 
     <div :class="isWaitingOnReply ? 'chat-prompt-aurora' : undefined">
-      <PromptInput
+      <ChatPromptInputContextMenu>
+        <PromptInput
         accept="image/*"
         :class="promptInputClass"
         multiple
@@ -633,7 +634,8 @@ watch(
             </Tooltip>
           </PromptInputTools>
         </PromptInputFooter>
-      </PromptInput>
+        </PromptInput>
+      </ChatPromptInputContextMenu>
     </div>
     <div class="mt-1 flex w-full min-w-0 items-center justify-between gap-1 px-1">
       <div class="flex min-w-0 items-center gap-1">

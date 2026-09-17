@@ -120,6 +120,20 @@ const imagePart = (): FileUIPart => ({
   filename: 'shot.png',
 })
 
+const promptInputContextMenuStub = {
+  name: 'ChatPromptInputContextMenu',
+  template: '<div><slot /></div>',
+}
+
+const mountPromptInput = () =>
+  shallowMount(ChatPromptInput, {
+    global: {
+      stubs: {
+        ChatPromptInputContextMenu: promptInputContextMenuStub,
+      },
+    },
+  })
+
 describe('ChatPromptInput handleSubmit', () => {
   beforeEach(() => {
     toastError.mockClear()
@@ -135,7 +149,7 @@ describe('ChatPromptInput handleSubmit', () => {
     )
     normalizeAttachmentFiles.mockRejectedValueOnce(attachError)
 
-    const wrapper = shallowMount(ChatPromptInput)
+    const wrapper = mountPromptInput()
     await flushPromises()
 
     const promptProps = wrapper.findComponent(PromptInput).vm.$.vnode.props as {
@@ -183,7 +197,7 @@ describe('ChatPromptInput handleSubmit', () => {
     }
     normalizeAttachmentFiles.mockResolvedValueOnce([normalized])
 
-    const wrapper = shallowMount(ChatPromptInput)
+    const wrapper = mountPromptInput()
     await flushPromises()
 
     await wrapper.findComponent(PromptInput).vm.$emit('submit', {
