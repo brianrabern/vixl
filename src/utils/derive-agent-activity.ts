@@ -39,10 +39,10 @@ export default (args: DeriveAgentActivityArgs): string | null => {
     return 'Waiting for approval'
   }
   if (args.hasPendingQuestion) {
-    return 'Waiting for your answer'
+    return null
   }
   if (args.hasPendingMcpAuth) {
-    return 'Waiting for MCP authentication'
+    return null
   }
 
   const isLive = args.status === 'streaming' || args.status === 'submitted'

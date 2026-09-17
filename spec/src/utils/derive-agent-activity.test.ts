@@ -50,6 +50,36 @@ describe('deriveAgentActivity', () => {
     ).toBe('Waiting for approval')
   })
 
+  it('returns null for a pending question', () => {
+    expect(
+      deriveAgentActivity({
+        status: 'ready',
+        turn: turn({}),
+        runningSubagents: [],
+        hasPendingQuestion: true,
+      }),
+    ).toBeNull()
+
+    expect(
+      deriveAgentActivity({
+        status: 'streaming',
+        turn: turn({}),
+        runningSubagents: [],
+        hasPendingQuestion: true,
+      }),
+    ).toBeNull()
+
+    expect(
+      deriveAgentActivity({
+        status: 'streaming',
+        turn: turn({}),
+        runningSubagents: [],
+        hasPendingQuestion: true,
+        compacting: true,
+      }),
+    ).toBeNull()
+  })
+
   it('waits for MCP authentication', () => {
     expect(
       deriveAgentActivity({
@@ -58,7 +88,7 @@ describe('deriveAgentActivity', () => {
         runningSubagents: [],
         hasPendingMcpAuth: true,
       }),
-    ).toBe('Waiting for MCP authentication')
+    ).toBeNull()
   })
 
   it('returns null while a blocking subagent runs', () => {
