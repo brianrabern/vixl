@@ -2,7 +2,10 @@ import type { UIMessage } from 'ai'
 import type { AgentStep } from '@/types/chat/agent-step'
 import type { AgentTurn } from '@/types/chat/agent-turn'
 import { chatMessageLineSchema } from '@/schemas/chat-message-line'
-import applyHydrateHarnessEvent, { type HydrateAccumulator } from './hydrate-harness'
+import applyHydrateHarnessEvent from './hydrate-harness'
+import hydrateTimelineBuilder, {
+  type HydrateAccumulator,
+} from './hydrate-timeline-builder'
 import {
   closeRunningTools,
   distributeLegacyStepText,
@@ -18,10 +21,7 @@ export type { HydrateAccumulator }
 export const createFlushTurn = (acc: HydrateAccumulator): (() => void) => {
   return (): void => {
     if (!acc.pendingTurn) {
-      if (acc.pendingSubagents.length > 0) {
-        acc.nextTimeline.push(...acc.pendingSubagents)
-        acc.pendingSubagents = []
-      }
+      hydrateTimelineBuilder.mergePendingSubagents(acc)
       return
     }
     if (acc.currentStepId) {
@@ -46,6 +46,7 @@ export const createFlushTurn = (acc: HydrateAccumulator): (() => void) => {
         .map((step) => step.reasoning)
         .join('')
       acc.nextTimeline.push({ type: 'agent-turn', turn: normalizedTurn })
+      hydrateTimelineBuilder.indexFlushedTurn(acc, normalizedTurn)
       acc.nextMessages.push({
         id: normalizedTurn.id,
         role: 'assistant',
@@ -60,10 +61,7 @@ export const createFlushTurn = (acc: HydrateAccumulator): (() => void) => {
           : {}),
       })
     }
-    if (acc.pendingSubagents.length > 0) {
-      acc.nextTimeline.push(...acc.pendingSubagents)
-      acc.pendingSubagents = []
-    }
+    hydrateTimelineBuilder.mergePendingSubagents(acc)
     acc.pendingTurn = null
     acc.currentStepId = null
   }

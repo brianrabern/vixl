@@ -19,6 +19,14 @@ vi.mock('@/services/harness/plan-execution-session', () => ({
   setSubagentModelLock: vi.fn<(...args: unknown[]) => void>(),
 }))
 
+const toastError = vi.hoisted(() => vi.fn<(...args: unknown[]) => void>())
+
+vi.mock('vue-sonner', () => ({
+  toast: {
+    error: (...args: unknown[]) => toastError(...args),
+  },
+}))
+
 import useAgentHarness from '@/composables/use-agent-harness'
 
 describe('createSessionOps flushPendingChatMessage', () => {
@@ -92,12 +100,12 @@ describe('createSessionOps flushPendingChatMessage', () => {
 })
 
 describe('createSessionOps initHarness', () => {
-  it('restores pending approvals and usage when a harness is bound', async () => {
+  it('starts usage restore without awaiting it on the paint path', async () => {
     const { createSessionOps } = await import('@/composables/agent-thread-view/session')
 
     const restoreUsageLedger = vi
       .fn<() => Promise<void>>()
-      .mockResolvedValue(undefined)
+      .mockReturnValue(new Promise(() => {}))
     const restorePendingApprovals = vi.fn<() => void>()
     const setPermissionLevel = vi.fn<(level: string) => void>()
     vi.mocked(useAgentHarness).mockReturnValue({
@@ -121,6 +129,39 @@ describe('createSessionOps initHarness', () => {
     expect(restoreUsageLedger).toHaveBeenCalledTimes(1)
     expect(setPermissionLevel).toHaveBeenCalledWith('ask')
   })
+
+  it('toasts when usage restore rejects without blocking initHarness', async () => {
+    const { createSessionOps } = await import('@/composables/agent-thread-view/session')
+    toastError.mockClear()
+
+    const restoreUsageLedger = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new Error('sqlite locked'))
+    const restorePendingApprovals = vi.fn<() => void>()
+    const setPermissionLevel = vi.fn<(level: string) => void>()
+    vi.mocked(useAgentHarness).mockReturnValue({
+      restoreUsageLedger,
+      restorePendingApprovals,
+      setPermissionLevel,
+    } as unknown as ReturnType<typeof useAgentHarness>)
+
+    const state = {
+      chatId: computed(() => 'chat-1'),
+      projectSlug: computed(() => 'proj'),
+      isStandalone: computed(() => false),
+      sessionPermissionLevel: ref('ask'),
+      harness: shallowRef(null),
+    } as unknown as AgentThreadViewState
+
+    const session = createSessionOps(state)
+    await session.initHarness('/tmp/proj', 'Proj')
+
+    expect(restoreUsageLedger).toHaveBeenCalledTimes(1)
+    await Promise.resolve()
+    expect(toastError).toHaveBeenCalledWith('Failed to restore usage', {
+      description: 'sqlite locked',
+    })
+  })
 })
 
 describe('createSessionOps loadThread reuse', () => {
@@ -130,7 +171,7 @@ describe('createSessionOps loadThread reuse', () => {
 
     const restoreUsageLedger = vi
       .fn<() => Promise<void>>()
-      .mockResolvedValue(undefined)
+      .mockReturnValue(new Promise(() => {}))
     const restorePendingApprovals = vi.fn<() => void>()
 
     const state = {

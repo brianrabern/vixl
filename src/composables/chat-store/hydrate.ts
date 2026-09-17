@@ -1,7 +1,8 @@
 import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
 import { readChatMeta, readChatMessages } from '@/services/vixl/vixl-tauri'
 import { mapMeta } from './helpers'
-import { applyHydrateLine, createFlushTurn, type HydrateAccumulator } from './hydrate-lines'
+import { applyHydrateLine, createFlushTurn } from './hydrate-lines'
+import hydrateTimelineBuilder from './hydrate-timeline-builder'
 import { finalizeHydratedSubagents } from './timeline'
 import type { ChatSession } from './types'
 
@@ -50,13 +51,7 @@ const hydrateSessionFromDisk = async (session: ChatSession): Promise<void> => {
   const metaRecord = await readChatMeta(session.projectSlug, session.chatId)
   session.meta.value = mapMeta(metaRecord)
   const lines = await readChatMessages(session.projectSlug, session.chatId)
-  const acc: HydrateAccumulator = {
-    nextMessages: [],
-    nextTimeline: [],
-    pendingTurn: null,
-    currentStepId: null,
-    pendingSubagents: [],
-  }
+  const acc = hydrateTimelineBuilder.createAccumulator()
   const flushTurn = createFlushTurn(acc)
 
   for (const line of lines) {

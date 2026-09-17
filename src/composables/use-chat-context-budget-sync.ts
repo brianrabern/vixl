@@ -2,7 +2,6 @@ import { effectScope, onWatcherCleanup, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import type { VixlChatMode } from '@/types/vixl/vixl-settings'
 import type { ContextMention } from '@/types/harness/context-mention'
-import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
 import { HOME_CHAT_SLUG } from '@/constants/home-chat'
 import { getFrozenPrefix } from '@/services/harness/prefix-contract'
 import { normalizeStoredModelRef } from '@/schemas/vixl-settings'
@@ -28,54 +27,6 @@ if (import.meta.hot) {
     refreshImpl = null
   })
 }
-
-const timelineBudgetKey = (timeline: ChatTimelineItem[]): string =>
-  timeline
-    .map((item) => {
-      if (item.type === 'user') {
-        const partChars = item.message.parts.reduce((sum, part) => {
-          if (
-            part &&
-            typeof part === 'object' &&
-            'text' in part &&
-            typeof (part as { text: unknown }).text === 'string'
-          ) {
-            return sum + (part as { text: string }).text.length
-          }
-          return sum + 8
-        }, 0)
-        return `u:${item.message.id}:${item.message.parts.length}:${partChars}`
-      }
-      if (item.type === 'agent-turn') {
-        const turn = item.turn
-        const steps = turn.steps
-          .map((step) => {
-            const tools = step.tools
-              .map((tool) => {
-                const argChars =
-                  tool.args === undefined ? 0 : JSON.stringify(tool.args).length
-                const resultChars =
-                  tool.result === undefined ? 0 : JSON.stringify(tool.result).length
-                return `${tool.toolCallId}:${tool.status}:${argChars}:${resultChars}`
-              })
-              .join(',')
-            return `${step.id}:${step.text.length}:${step.reasoning.length}:${tools}`
-          })
-          .join('|')
-        return `a:${turn.id}:${turn.text.length}:${steps}`
-      }
-      if (item.type === 'compaction') {
-        return `c:${item.summary.length}:${item.focus ?? ''}`
-      }
-      if (item.type === 'subagent') {
-        return `s:${item.subagentId}:${item.status}:${item.summary?.length ?? 0}`
-      }
-      if (item.type === 'todo') {
-        return `t:${item.todos.length}`
-      }
-      return 'x'
-    })
-    .join('\n')
 
 const mcpStatusKey = (states: Record<string, { status: string; tools: unknown[] }>): string =>
   Object.keys(states)
@@ -186,7 +137,7 @@ export default () => {
           draftMode,
           draftMentions,
           () => chatStore.loading.value,
-          () => timelineBudgetKey(chatStore.timeline.value),
+          () => chatStore.timeline.value,
           () => chatStore.messages.value.length,
           () => fleet.activeProject.value?.id,
           () => chatStore.meta.value?.model,

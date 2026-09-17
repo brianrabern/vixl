@@ -1,18 +1,11 @@
-import type { UIMessage } from 'ai'
 import type { AgentStep } from '@/types/chat/agent-step'
-import type { AgentTurn } from '@/types/chat/agent-turn'
-import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { ToolRun } from '@/types/harness/tool-run'
 import type { HarnessEvent } from '@/types/harness/harness-event'
 import mapSubagentResultStatus from '@/utils/map-subagent-result-status'
 import { parseChatArtifact, parseChatDiffs, parseTodoItems } from './helpers'
-import {
-  appendSubagentToolEvent,
-  completeSubagentTimelineItem,
-  setSubagentPrompt,
-  upsertSubagentStart,
-  upsertTodoTimelineItem,
-} from './timeline'
+import hydrateTimelineBuilder, {
+  type HydrateAccumulator,
+} from './hydrate-timeline-builder'
 import {
   closeRunningTools,
   createStep,
@@ -22,13 +15,7 @@ import {
   upsertToolInStep,
 } from './message-parsing'
 
-export type HydrateAccumulator = {
-  nextMessages: UIMessage[]
-  nextTimeline: ChatTimelineItem[]
-  pendingTurn: AgentTurn | null
-  currentStepId: string | null
-  pendingSubagents: ChatTimelineItem[]
-}
+export type { HydrateAccumulator }
 
 const applyHydrateHarnessEvent = (
   acc: HydrateAccumulator,
@@ -40,9 +27,7 @@ const applyHydrateHarnessEvent = (
   if (type === 'todo-update') {
     const todos = parseTodoItems(harnessEvent.todos)
     if (todos.length > 0) {
-      const merged = upsertTodoTimelineItem(acc.nextTimeline, todos)
-      acc.nextTimeline.length = 0
-      acc.nextTimeline.push(...merged)
+      hydrateTimelineBuilder.upsertTodo(acc, todos)
     }
     return true
   }
@@ -65,8 +50,7 @@ const applyHydrateHarnessEvent = (
         ? harnessEvent.model
         : undefined
     if (subagentId) {
-      const target = acc.pendingTurn ? acc.pendingSubagents : acc.nextTimeline
-      const merged = upsertSubagentStart(target, {
+      hydrateTimelineBuilder.startSubagent(acc, {
         subagentId,
         toolCallId,
         name,
@@ -74,12 +58,6 @@ const applyHydrateHarnessEvent = (
         prompt,
         model,
       })
-      if (acc.pendingTurn) {
-        acc.pendingSubagents = merged
-      } else {
-        acc.nextTimeline.length = 0
-        acc.nextTimeline.push(...merged)
-      }
     }
     return true
   }
@@ -89,26 +67,7 @@ const applyHydrateHarnessEvent = (
     const summary = String(harnessEvent.summary ?? '')
     const status = mapSubagentResultStatus(harnessEvent.outcome, summary)
     if (subagentId) {
-      const inPending = acc.pendingSubagents.some(
-        (item) => item.type === 'subagent' && item.subagentId === subagentId,
-      )
-      if (inPending) {
-        acc.pendingSubagents = completeSubagentTimelineItem(
-          acc.pendingSubagents,
-          subagentId,
-          summary,
-          status,
-        )
-      } else {
-        const merged = completeSubagentTimelineItem(
-          acc.nextTimeline,
-          subagentId,
-          summary,
-          status,
-        )
-        acc.nextTimeline.length = 0
-        acc.nextTimeline.push(...merged)
-      }
+      hydrateTimelineBuilder.completeSubagent(acc, subagentId, summary, status)
     }
     return true
   }
@@ -122,25 +81,11 @@ const applyHydrateHarnessEvent = (
       typeof nested === 'object' &&
       'type' in (nested as Record<string, unknown>)
     ) {
-      const nestedEvent = nested as HarnessEvent
-      const inPending = acc.pendingSubagents.some(
-        (item) => item.type === 'subagent' && item.subagentId === subagentId,
+      hydrateTimelineBuilder.appendSubagentEvent(
+        acc,
+        subagentId,
+        nested as HarnessEvent,
       )
-      if (inPending) {
-        acc.pendingSubagents = appendSubagentToolEvent(
-          acc.pendingSubagents,
-          subagentId,
-          nestedEvent,
-        )
-      } else {
-        const merged = appendSubagentToolEvent(
-          acc.nextTimeline,
-          subagentId,
-          nestedEvent,
-        )
-        acc.nextTimeline.length = 0
-        acc.nextTimeline.push(...merged)
-      }
     }
     return true
   }
@@ -149,20 +94,7 @@ const applyHydrateHarnessEvent = (
     const subagentId = String(harnessEvent.subagentId ?? '')
     const prompt = String(harnessEvent.prompt ?? '')
     if (subagentId && prompt) {
-      const inPending = acc.pendingSubagents.some(
-        (item) => item.type === 'subagent' && item.subagentId === subagentId,
-      )
-      if (inPending) {
-        acc.pendingSubagents = setSubagentPrompt(
-          acc.pendingSubagents,
-          subagentId,
-          prompt,
-        )
-      } else {
-        const merged = setSubagentPrompt(acc.nextTimeline, subagentId, prompt)
-        acc.nextTimeline.length = 0
-        acc.nextTimeline.push(...merged)
-      }
+      hydrateTimelineBuilder.setSubagentPrompt(acc, subagentId, prompt)
     }
     return true
   }
@@ -237,33 +169,8 @@ const applyHydrateHarnessEvent = (
     if (!run.toolCallId) {
       return true
     }
-    const existingIndex = acc.nextTimeline.findIndex(
-      (item) =>
-        item.type === 'agent-turn' &&
-        item.turn.steps.some((step) =>
-          step.tools.some((tool) => tool.toolCallId === run.toolCallId),
-        ),
-    )
-    if (existingIndex >= 0) {
-      const item = acc.nextTimeline[existingIndex]
-      if (item?.type === 'agent-turn') {
-        const turn = item.turn
-        const step = turn.steps.find((candidate) =>
-          candidate.tools.some((tool) => tool.toolCallId === run.toolCallId),
-        )
-        if (step) {
-          const updatedStep = upsertToolInStep(step, run)
-          const updatedTurn = patchStep(turn, step.id, updatedStep)
-          const nextTimeline = acc.nextTimeline.map((timelineItem, index) =>
-            index === existingIndex
-              ? { type: 'agent-turn' as const, turn: updatedTurn }
-              : timelineItem,
-          )
-          acc.nextTimeline.length = 0
-          acc.nextTimeline.push(...nextTimeline)
-          return true
-        }
-      }
+    if (hydrateTimelineBuilder.upsertCommittedTool(acc, run)) {
+      return true
     }
     if (!acc.pendingTurn) {
       acc.pendingTurn = {

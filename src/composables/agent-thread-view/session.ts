@@ -27,7 +27,11 @@ export const createSessionOps = (state: AgentThreadViewState) => {
     state.harness.value = nextHarness
     nextHarness.setPermissionLevel(state.sessionPermissionLevel.value)
     nextHarness.restorePendingApprovals()
-    await nextHarness.restoreUsageLedger()
+    nextHarness.restoreUsageLedger().catch((error) => {
+      toast.error('Failed to restore usage', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    })
   }
 
   const flushPendingChatMessage = async (): Promise<void> => {
@@ -105,7 +109,11 @@ export const createSessionOps = (state: AgentThreadViewState) => {
         Boolean(loadedKey?.endsWith(`:${state.chatId.value}`)))
     if (liveHarness && liveSameChat) {
       liveHarness.restorePendingApprovals()
-      await liveHarness.restoreUsageLedger()
+      liveHarness.restoreUsageLedger().catch((error) => {
+        toast.error('Failed to restore usage', {
+          description: error instanceof Error ? error.message : 'Unknown error',
+        })
+      })
       await flushPendingChatMessage()
       return
     }
