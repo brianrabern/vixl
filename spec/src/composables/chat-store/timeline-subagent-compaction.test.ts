@@ -184,9 +184,29 @@ describe('appendSubagentToolEvent steer and history', () => {
       return
     }
     expect(item.status).toBe('running')
-    expect(item.steers).toEqual(['keep going'])
+    expect(item.steers).toEqual([{ message: 'keep going', toolBoundary: 0 }])
     expect(item.pendingSteers).toEqual([])
     expect(item.tools).toEqual([])
+  })
+
+  it('records a steer toolBoundary equal to the tool count at steer time', () => {
+    const withTool = appendSubagentToolEvent(started(), 'sub-1', {
+      type: 'tool-start',
+      toolCallId: 't1',
+      name: 'read_file',
+      args: { path: 'a.ts' },
+    })
+    const next = appendSubagentToolEvent(withTool, 'sub-1', {
+      type: 'subagent-steer',
+      message: 'keep going',
+    })
+    const item = next[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.steers).toEqual([{ message: 'keep going', toolBoundary: 1 }])
+    expect(item.tools).toHaveLength(1)
   })
 
   it('consumes a matching pending steer without duplicating the message', () => {
@@ -205,7 +225,7 @@ describe('appendSubagentToolEvent steer and history', () => {
     if (item?.type !== 'subagent') {
       return
     }
-    expect(item.steers).toEqual(['keep going'])
+    expect(item.steers).toEqual([{ message: 'keep going', toolBoundary: 0 }])
     expect(item.pendingSteers).toEqual([])
   })
 
@@ -288,7 +308,101 @@ describe('queueSubagentSteer and rollback', () => {
     if (item?.type !== 'subagent') {
       return
     }
-    expect(item.steers).toEqual(['keep going'])
+    expect(item.steers).toEqual([{ message: 'keep going', toolBoundary: 0 }])
     expect(item.pendingSteers).toEqual([])
+  })
+})
+
+describe('completeSubagentTimelineItem leftover tools', () => {
+  it('closes leftover running tools to error and leaves terminal tools untouched', () => {
+    const withRunning = appendSubagentToolEvent(started(), 'sub-1', {
+      type: 'tool-start',
+      toolCallId: 't-running',
+      name: 'read_file',
+      args: { path: 'a.ts' },
+    })
+    const withDone = appendSubagentToolEvent(withRunning, 'sub-1', {
+      type: 'tool-start',
+      toolCallId: 't-done',
+      name: 'read_file',
+      args: { path: 'b.ts' },
+    })
+    const doneResult = appendSubagentToolEvent(withDone, 'sub-1', {
+      type: 'tool-result',
+      toolCallId: 't-done',
+      result: { content: 'ok' },
+      isError: false,
+    })
+    const withError = appendSubagentToolEvent(doneResult, 'sub-1', {
+      type: 'tool-start',
+      toolCallId: 't-error',
+      name: 'read_file',
+      args: { path: 'c.ts' },
+    })
+    const errorResult = appendSubagentToolEvent(withError, 'sub-1', {
+      type: 'tool-result',
+      toolCallId: 't-error',
+      result: { error: 'boom' },
+      isError: true,
+    })
+    const completed = completeSubagentTimelineItem(
+      errorResult,
+      'sub-1',
+      'first pass',
+      'error',
+    )
+    const item = completed[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.status).toBe('error')
+    expect(item.tools).toEqual([
+      {
+        toolCallId: 't-running',
+        name: 'read_file',
+        status: 'error',
+        args: { path: 'a.ts' },
+        result: { error: 'Tool did not complete' },
+      },
+      {
+        toolCallId: 't-done',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'b.ts' },
+        result: { content: 'ok' },
+      },
+      {
+        toolCallId: 't-error',
+        name: 'read_file',
+        status: 'error',
+        args: { path: 'c.ts' },
+        result: { error: 'boom' },
+      },
+    ])
+  })
+})
+
+describe('upsertSubagentStart existing item', () => {
+  it('resets status to running when the same subagent starts again', () => {
+    const done = completeSubagentTimelineItem(
+      started(),
+      'sub-1',
+      'first pass',
+      'done',
+    )
+    const reopened = upsertSubagentStart(done, {
+      subagentId: 'sub-1',
+      name: 'explore',
+      blocking: false,
+      prompt: 'look around',
+    })
+    const item = reopened[0]
+    expect(item?.type).toBe('subagent')
+    if (item?.type !== 'subagent') {
+      return
+    }
+    expect(item.status).toBe('running')
+    expect(item.summary).toBe('first pass')
   })
 })

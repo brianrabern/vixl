@@ -3,6 +3,20 @@ import type { AgentTurn } from '@/types/chat/agent-turn'
 import type { ChatTimelineItem, SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { ToolRun } from '@/types/harness/tool-run'
 
+type TimelineBoundary =
+  | {
+      kind: 'compaction'
+      toolBoundary: number
+      summary: string
+      focus: string | null
+    }
+  | {
+      kind: 'steer'
+      toolBoundary: number
+      message: string
+      steerIndex: number
+    }
+
 const userItem = (
   id: string,
   text: string,
@@ -22,25 +36,23 @@ const buildTurn = (
   turnIndex: number,
   tools: ToolRun[],
   text: string,
-): AgentTurn => {
-  const segmented = subagent.compactions.length > 0
-  return {
-    id: segmented
-      ? `${subagent.subagentId}-turn-${turnIndex}`
-      : `${subagent.subagentId}-turn`,
-    text,
-    steps: [
-      {
-        id: segmented
-          ? `${subagent.subagentId}-step-${turnIndex}`
-          : `${subagent.subagentId}-step`,
-        text: '',
-        reasoning: '',
-        tools,
-      },
-    ],
-  }
-}
+  segmented: boolean,
+): AgentTurn => ({
+  id: segmented
+    ? `${subagent.subagentId}-turn-${turnIndex}`
+    : `${subagent.subagentId}-turn`,
+  text,
+  steps: [
+    {
+      id: segmented
+        ? `${subagent.subagentId}-step-${turnIndex}`
+        : `${subagent.subagentId}-step`,
+      text: '',
+      reasoning: '',
+      tools,
+    },
+  ],
+})
 
 const turnHasContent = (
   turn: AgentTurn,
@@ -51,22 +63,82 @@ const turnHasContent = (
   turn.steps.some((step) => step.tools.length > 0) ||
   (includeRunning && status === 'running')
 
-const appendSteerMessages = (
+const collectBoundaries = (subagent: SubagentTimelineItem): TimelineBoundary[] => {
+  const boundaries: TimelineBoundary[] = [
+    ...subagent.compactions.map(
+      (compaction): TimelineBoundary => ({
+        kind: 'compaction',
+        toolBoundary: compaction.toolBoundary,
+        summary: compaction.summary,
+        focus: compaction.focus,
+      }),
+    ),
+    ...(subagent.steers ?? []).flatMap((steer, steerIndex): TimelineBoundary[] => {
+      const message = steer.message.trim()
+      if (!message) {
+        return []
+      }
+      return [
+        {
+          kind: 'steer',
+          toolBoundary: steer.toolBoundary,
+          message,
+          steerIndex,
+        },
+      ]
+    }),
+  ]
+  const kindRank = (kind: TimelineBoundary['kind']): number =>
+    kind === 'steer' ? 0 : 1
+  return boundaries.sort((left, right) => {
+    const boundaryDiff = left.toolBoundary - right.toolBoundary
+    if (boundaryDiff !== 0) {
+      return boundaryDiff
+    }
+    return kindRank(left.kind) - kindRank(right.kind)
+  })
+}
+
+const appendPendingSteerMessages = (
   items: ChatTimelineItem[],
   subagent: SubagentTimelineItem,
 ): void => {
-  const delivered = subagent.steers ?? []
-  const pending = subagent.pendingSteers ?? []
-  const messages = [...delivered, ...pending]
-  for (const [index, text] of messages.entries()) {
+  const deliveredCount = (subagent.steers ?? []).length
+  for (const [offset, text] of (subagent.pendingSteers ?? []).entries()) {
     const trimmed = text.trim()
     if (!trimmed) {
       continue
     }
     items.push(
-      userItem(`${subagent.subagentId}-steer-${index}`, trimmed, subagent.model),
+      userItem(
+        `${subagent.subagentId}-steer-${deliveredCount + offset}`,
+        trimmed,
+        subagent.model,
+      ),
     )
   }
+}
+
+const pushBoundaryItem = (
+  items: ChatTimelineItem[],
+  subagent: SubagentTimelineItem,
+  boundary: TimelineBoundary,
+): void => {
+  if (boundary.kind === 'compaction') {
+    items.push({
+      type: 'compaction',
+      summary: boundary.summary,
+      focus: boundary.focus,
+    })
+    return
+  }
+  items.push(
+    userItem(
+      `${subagent.subagentId}-steer-${boundary.steerIndex}`,
+      boundary.message,
+      subagent.model,
+    ),
+  )
 }
 
 export default (subagent: SubagentTimelineItem): ChatTimelineItem[] => {
@@ -82,33 +154,38 @@ export default (subagent: SubagentTimelineItem): ChatTimelineItem[] => {
     )
   }
 
-  if (subagent.compactions.length === 0) {
-    const turn = buildTurn(subagent, 0, subagent.tools, subagent.summary?.trim() ?? '')
+  const boundaries = collectBoundaries(subagent)
+  const segmented = boundaries.length > 0
+
+  if (!segmented) {
+    const turn = buildTurn(
+      subagent,
+      0,
+      subagent.tools,
+      subagent.summary?.trim() ?? '',
+      false,
+    )
     if (turnHasContent(turn, true, subagent.status)) {
       items.push({ type: 'agent-turn', turn })
     }
-    appendSteerMessages(items, subagent)
+    appendPendingSteerMessages(items, subagent)
     return items
   }
 
   let previousBoundary = 0
   let turnIndex = 0
 
-  for (const compaction of subagent.compactions) {
-    const tools = subagent.tools.slice(previousBoundary, compaction.toolBoundary)
+  for (const boundary of boundaries) {
+    const tools = subagent.tools.slice(previousBoundary, boundary.toolBoundary)
     if (tools.length > 0) {
       items.push({
         type: 'agent-turn',
-        turn: buildTurn(subagent, turnIndex, tools, ''),
+        turn: buildTurn(subagent, turnIndex, tools, '', true),
       })
       turnIndex += 1
     }
-    items.push({
-      type: 'compaction',
-      summary: compaction.summary,
-      focus: compaction.focus,
-    })
-    previousBoundary = compaction.toolBoundary
+    pushBoundaryItem(items, subagent, boundary)
+    previousBoundary = boundary.toolBoundary
   }
 
   const trailing = buildTurn(
@@ -116,11 +193,12 @@ export default (subagent: SubagentTimelineItem): ChatTimelineItem[] => {
     turnIndex,
     subagent.tools.slice(previousBoundary),
     subagent.summary?.trim() ?? '',
+    true,
   )
   if (turnHasContent(trailing, true, subagent.status)) {
     items.push({ type: 'agent-turn', turn: trailing })
   }
 
-  appendSteerMessages(items, subagent)
+  appendPendingSteerMessages(items, subagent)
   return items
 }

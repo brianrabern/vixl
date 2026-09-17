@@ -2,6 +2,7 @@ import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
 import { readChatMeta, readChatMessages } from '@/services/vixl/vixl-tauri'
 import { mapMeta } from './helpers'
 import { applyHydrateLine, createFlushTurn, type HydrateAccumulator } from './hydrate-lines'
+import { finalizeHydratedSubagents } from './timeline'
 import type { ChatSession } from './types'
 
 const backfillSubagentPrompts = (nextTimeline: ChatTimelineItem[]): void => {
@@ -66,7 +67,7 @@ const hydrateSessionFromDisk = async (session: ChatSession): Promise<void> => {
   backfillSubagentPrompts(acc.nextTimeline)
 
   session.messages.value = acc.nextMessages
-  session.timeline.value = acc.nextTimeline
+  session.timeline.value = finalizeHydratedSubagents(acc.nextTimeline)
   session.activeTurnId.value = null
   session.activeStepId.value = null
   session.pendingStepText.value = ''

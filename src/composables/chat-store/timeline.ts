@@ -1,6 +1,7 @@
 import type { ChatTimelineItem, SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { TodoItem, HarnessEvent } from '@/types/harness/harness-event'
 import applySubagentToolEvent from '@/utils/apply-subagent-tool-event'
+import closeIncompleteSubagentTools from './close-incomplete-subagent-tools'
 
 export const upsertTodoTimelineItem = (
   items: ChatTimelineItem[],
@@ -39,6 +40,7 @@ export const upsertSubagentStart = (
         blocking: subagent.blocking,
         prompt: subagent.prompt ?? existing.prompt,
         model: subagent.model ?? existing.model,
+        status: 'running',
         tools: subagent.tools ?? existing.tools,
         compacting: subagent.compacting ?? existing.compacting,
         compactions: subagent.compactions ?? existing.compactions ?? [],
@@ -83,6 +85,7 @@ export const completeSubagentTimelineItem = (
         summary,
         compacting: false,
         compactions: existing.compactions ?? [],
+        tools: closeIncompleteSubagentTools(existing.tools),
       }
     }
     return next
@@ -102,6 +105,21 @@ export const completeSubagentTimelineItem = (
     },
   ]
 }
+
+export const finalizeHydratedSubagents = (
+  items: ChatTimelineItem[],
+): ChatTimelineItem[] =>
+  items.map((item) => {
+    if (item.type !== 'subagent' || item.status !== 'running') {
+      return item
+    }
+    return {
+      ...item,
+      status: 'error',
+      compacting: false,
+      tools: closeIncompleteSubagentTools(item.tools),
+    }
+  })
 
 export const appendSubagentToolEvent = (
   items: ChatTimelineItem[],
@@ -160,7 +178,10 @@ export const appendSubagentToolEvent = (
     next[index] = {
       ...existing,
       status: 'running',
-      steers: [...(existing.steers ?? []), event.message],
+      steers: [
+        ...(existing.steers ?? []),
+        { message: event.message, toolBoundary: existing.tools.length },
+      ],
       pendingSteers: pending,
     }
     return next
