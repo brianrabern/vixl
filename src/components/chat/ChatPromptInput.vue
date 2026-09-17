@@ -373,7 +373,15 @@ const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
   }
   contextBudgetSync.setDraftMentions(mentions)
 
-  const normalizedFiles = await normalizeAttachmentFiles(files)
+  let normalizedFiles: FileUIPart[]
+  try {
+    normalizedFiles = await normalizeAttachmentFiles(files)
+  } catch (error) {
+    toast.error('Could not attach image', {
+      description: error instanceof Error ? error.message : 'Unknown error',
+    })
+    return
+  }
 
   emit('submit', {
     text,
