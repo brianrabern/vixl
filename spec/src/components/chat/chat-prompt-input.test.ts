@@ -130,24 +130,46 @@ describe('ChatPromptInput handleSubmit', () => {
   })
 
   it('toasts and does not emit submit when attachment normalization fails', async () => {
-    normalizeAttachmentFiles.mockRejectedValueOnce(
-      new Error('Image could not be compressed under the 3.75MB provider limit'),
+    const attachError = new Error(
+      'Image could not be compressed under the 3.75MB provider limit',
     )
+    normalizeAttachmentFiles.mockRejectedValueOnce(attachError)
 
     const wrapper = shallowMount(ChatPromptInput)
     await flushPromises()
 
-    await wrapper.findComponent(PromptInput).vm.$emit('submit', {
-      text: 'caption',
-      files: [imagePart()],
-    })
+    const promptProps = wrapper.findComponent(PromptInput).vm.$.vnode.props as {
+      onSubmit: (message: { text: string, files: FileUIPart[] }) => Promise<void>
+      onError: (err: { code: string, message: string }) => void
+    }
+
+    await expect(
+      promptProps.onSubmit({
+        text: 'caption',
+        files: [imagePart()],
+      }),
+    ).rejects.toThrow(attachError)
     await flushPromises()
 
     expect(normalizeAttachmentFiles).toHaveBeenCalledTimes(1)
+    expect(toastError).toHaveBeenCalledTimes(1)
     expect(toastError).toHaveBeenCalledWith('Could not attach image', {
       description: 'Image could not be compressed under the 3.75MB provider limit',
     })
     expect(wrapper.emitted('submit')).toBeUndefined()
+
+    promptProps.onError({
+      code: 'submit_error',
+      message: attachError.message,
+    })
+    expect(toastError).toHaveBeenCalledTimes(1)
+
+    promptProps.onError({
+      code: 'submit_error',
+      message: 'Could not send message',
+    })
+    expect(toastError).toHaveBeenCalledTimes(2)
+    expect(toastError).toHaveBeenNthCalledWith(2, 'Could not send message')
 
     wrapper.unmount()
   })

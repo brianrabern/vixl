@@ -338,6 +338,8 @@ const enrichMentionsBeforeSend = async (
   return enriched
 }
 
+let submitErrorAlreadyToasted = false
+
 const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
   const text = payload.text.trim()
   const files: FileUIPart[] = payload.files ?? []
@@ -380,7 +382,8 @@ const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
     toast.error('Could not attach image', {
       description: error instanceof Error ? error.message : 'Unknown error',
     })
-    return
+    submitErrorAlreadyToasted = true
+    throw error
   }
 
   emit('submit', {
@@ -410,6 +413,10 @@ const handlePromptInputError = (err: { code: string, message: string }): void =>
     return
   }
   if (err.code === 'submit_error') {
+    if (submitErrorAlreadyToasted) {
+      submitErrorAlreadyToasted = false
+      return
+    }
     toast.error(err.message || 'Could not send message')
     return
   }
