@@ -6,6 +6,7 @@ import {
   Scissors,
   TextSelect,
 } from '@lucide/vue'
+import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -94,7 +95,7 @@ const handleCopy = async (): Promise<void> => {
       })
       return
     }
-    await navigator.clipboard.writeText(text)
+    await writeText(text)
   } catch (error) {
     toast.error('Could not copy', {
       description: formatUnknownError(error),
@@ -121,7 +122,7 @@ const handleCut = async (): Promise<void> => {
     }
 
     editor.chain().focus().run()
-    await navigator.clipboard.writeText(text)
+    await writeText(text)
     editor
       .chain()
       .focus()
@@ -145,7 +146,7 @@ const handlePaste = async (): Promise<void> => {
       return
     }
 
-    const text = await navigator.clipboard.readText()
+    const text = await readText()
     if (!text) {
       return
     }

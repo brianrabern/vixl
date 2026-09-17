@@ -6,11 +6,18 @@ import ChatPromptInputContextMenu from '@/components/chat/ChatPromptInputContext
 import useChatPromptEditor from '@/composables/use-chat-prompt-editor'
 
 const toastError = vi.hoisted(() => vi.fn<(...args: unknown[]) => void>())
+const writeText = vi.hoisted(() => vi.fn<(text: string) => Promise<void>>())
+const readText = vi.hoisted(() => vi.fn<() => Promise<string>>())
 
 vi.mock('vue-sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastError(...args),
   },
+}))
+
+vi.mock('@tauri-apps/plugin-clipboard-manager', () => ({
+  readText: () => readText(),
+  writeText: (text: string) => writeText(text),
 }))
 
 vi.mock('@/components/shadcn/ui/context-menu', () => ({
@@ -202,8 +209,6 @@ const createFakeEditor = (
   return { editor, commands, emit }
 }
 
-const writeText = vi.fn<(text: string) => Promise<void>>()
-const readText = vi.fn<() => Promise<string>>()
 const insertText = vi.fn<(text: string) => void>()
 
 const registerFakeEditor = (
@@ -247,13 +252,6 @@ beforeEach(() => {
   insertText.mockReset()
   writeText.mockResolvedValue(undefined)
   readText.mockResolvedValue('clipboard text')
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: {
-      writeText,
-      readText,
-    },
-  })
 })
 
 afterEach(() => {
