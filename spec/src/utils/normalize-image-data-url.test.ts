@@ -7,19 +7,7 @@ vi.mock('browser-image-compression', () => ({
   default: vi.fn<(file: File, options?: Record<string, unknown>) => Promise<File>>(),
 }))
 
-const PNG_DATA_URL = 'data:image/png;base64,AAAA'
-const WEBP_DATA_URL = 'data:image/webp;base64,AAAA'
-const JPEG_DATA_URL = 'data:image/jpeg;base64,AAAA'
 const MAX_RAW_BYTES = 3.75 * 1024 * 1024
-
-const stubFetchFile = (size: number, type: string): void => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => ({
-      blob: async () => new Blob([new Uint8Array(size)], { type }),
-    })),
-  )
-}
 
 const stubImageBitmap = (width: number, height: number): void => {
   vi.stubGlobal(
@@ -57,22 +45,25 @@ describe('normalize-image-data-url', () => {
   })
 
   it('returns png/jpeg input unchanged when size and dimensions are within limits', async () => {
-    stubFetchFile(1024, 'image/png')
     stubImageBitmap(800, 600)
 
-    const input = { dataUrl: PNG_DATA_URL, mediaType: 'image/png' }
-    await expect(normalizeImageDataUrl(input)).resolves.toEqual(input)
+    const png = {
+      dataUrl: bytesToDataUrl(new Uint8Array(1024), 'image/png'),
+      mediaType: 'image/png',
+    }
+    await expect(normalizeImageDataUrl(png)).resolves.toEqual(png)
     expect(imageCompression).not.toHaveBeenCalled()
 
-    stubFetchFile(2048, 'image/jpeg')
     stubImageBitmap(2000, 2000)
-    const jpeg = { dataUrl: JPEG_DATA_URL, mediaType: 'image/jpeg' }
+    const jpeg = {
+      dataUrl: bytesToDataUrl(new Uint8Array(2048), 'image/jpeg'),
+      mediaType: 'image/jpeg',
+    }
     await expect(normalizeImageDataUrl(jpeg)).resolves.toEqual(jpeg)
     expect(imageCompression).not.toHaveBeenCalled()
   })
 
   it('converts an oversize png to image/jpeg', async () => {
-    stubFetchFile(4 * 1024 * 1024, 'image/png')
     stubImageBitmap(800, 600)
 
     const compressedBytes = new Uint8Array([1, 2, 3, 4])
@@ -82,7 +73,7 @@ describe('normalize-image-data-url', () => {
     vi.mocked(imageCompression).mockResolvedValue(compressed)
 
     const result = await normalizeImageDataUrl({
-      dataUrl: PNG_DATA_URL,
+      dataUrl: bytesToDataUrl(new Uint8Array(4 * 1024 * 1024), 'image/png'),
       mediaType: 'image/png',
     })
 
@@ -101,7 +92,6 @@ describe('normalize-image-data-url', () => {
   })
 
   it('forces fileType image/jpeg for webp input', async () => {
-    stubFetchFile(512, 'image/webp')
     stubImageBitmap(100, 100)
 
     const compressedBytes = new Uint8Array([9, 8, 7])
@@ -111,7 +101,7 @@ describe('normalize-image-data-url', () => {
     vi.mocked(imageCompression).mockResolvedValue(compressed)
 
     const result = await normalizeImageDataUrl({
-      dataUrl: WEBP_DATA_URL,
+      dataUrl: bytesToDataUrl(new Uint8Array(512), 'image/webp'),
       mediaType: 'image/webp',
     })
 
@@ -125,7 +115,6 @@ describe('normalize-image-data-url', () => {
   })
 
   it('falls through to jpeg compression when createImageBitmap throws for a small png', async () => {
-    stubFetchFile(1024, 'image/png')
     vi.stubGlobal(
       'createImageBitmap',
       vi.fn(async () => {
@@ -140,7 +129,7 @@ describe('normalize-image-data-url', () => {
     vi.mocked(imageCompression).mockResolvedValue(compressed)
 
     const result = await normalizeImageDataUrl({
-      dataUrl: PNG_DATA_URL,
+      dataUrl: bytesToDataUrl(new Uint8Array(1024), 'image/png'),
       mediaType: 'image/png',
     })
 
@@ -155,7 +144,6 @@ describe('normalize-image-data-url', () => {
   })
 
   it('throws when the compressed result is still over budget', async () => {
-    stubFetchFile(4 * 1024 * 1024, 'image/png')
     stubImageBitmap(800, 600)
 
     const overBudget = new File(
@@ -167,18 +155,20 @@ describe('normalize-image-data-url', () => {
 
     await expect(
       normalizeImageDataUrl({
-        dataUrl: PNG_DATA_URL,
+        dataUrl: bytesToDataUrl(new Uint8Array(4 * 1024 * 1024), 'image/png'),
         mediaType: 'image/png',
       }),
     ).rejects.toThrow('Image could not be compressed under the 3.75MB provider limit')
   })
 
   it('propagates a compressor throw', async () => {
-    stubFetchFile(4 * 1024 * 1024, 'image/png')
     stubImageBitmap(800, 600)
     vi.mocked(imageCompression).mockRejectedValue(new Error('compress failed'))
 
-    const input = { dataUrl: PNG_DATA_URL, mediaType: 'image/png' }
+    const input = {
+      dataUrl: bytesToDataUrl(new Uint8Array(4 * 1024 * 1024), 'image/png'),
+      mediaType: 'image/png',
+    }
     await expect(normalizeImageDataUrl(input)).rejects.toThrow(
       'Failed to normalize image for provider: compress failed',
     )

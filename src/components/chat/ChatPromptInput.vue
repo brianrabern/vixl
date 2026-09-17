@@ -338,6 +338,8 @@ const enrichMentionsBeforeSend = async (
   return enriched
 }
 
+let submitErrorAlreadyToasted = false
+
 const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
   const text = payload.text.trim()
   const files: FileUIPart[] = payload.files ?? []
@@ -373,7 +375,16 @@ const handleSubmit = async (payload: PromptInputMessage): Promise<void> => {
   }
   contextBudgetSync.setDraftMentions(mentions)
 
-  const normalizedFiles = await normalizeAttachmentFiles(files)
+  let normalizedFiles: FileUIPart[]
+  try {
+    normalizedFiles = await normalizeAttachmentFiles(files)
+  } catch (error) {
+    toast.error('Could not attach image', {
+      description: error instanceof Error ? error.message : 'Unknown error',
+    })
+    submitErrorAlreadyToasted = true
+    throw error
+  }
 
   emit('submit', {
     text,
@@ -402,6 +413,10 @@ const handlePromptInputError = (err: { code: string, message: string }): void =>
     return
   }
   if (err.code === 'submit_error') {
+    if (submitErrorAlreadyToasted) {
+      submitErrorAlreadyToasted = false
+      return
+    }
     toast.error(err.message || 'Could not send message')
     return
   }

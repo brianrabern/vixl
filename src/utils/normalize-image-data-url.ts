@@ -1,5 +1,6 @@
 import imageCompression from 'browser-image-compression'
 import bytesToDataUrl from '@/utils/bytes-to-data-url'
+import dataUrlToBytes from '@/utils/data-url-to-bytes'
 
 // 3.75MB = 5MB base64 budget x 3/4. 2000px matches the Claude Code / OpenCode consensus.
 const MAX_SIZE_MB = 3.75
@@ -16,9 +17,8 @@ const fileFromDataUrl = async (
   dataUrl: string,
   mediaType: string,
 ): Promise<File> => {
-  const response = await fetch(dataUrl)
-  const blob = await response.blob()
-  return new File([blob], 'image', { type: mediaType })
+  const { bytes } = dataUrlToBytes(dataUrl)
+  return new File([new Uint8Array(bytes)], 'image', { type: mediaType })
 }
 
 const withinDimensionLimit = async (blob: Blob): Promise<boolean | null> => {

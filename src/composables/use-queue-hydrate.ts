@@ -1,6 +1,7 @@
 import type { FileUIPart } from 'ai'
 import type { QueuedChatMessage } from '@/types/chat/queued-chat-message'
 import { usePromptInput } from '@/components/ai-elements/prompt-input/context'
+import dataUrlToBytes from '@/utils/data-url-to-bytes'
 import { toast } from 'vue-sonner'
 
 const dataUrlToFile = async (part: FileUIPart): Promise<File | null> => {
@@ -8,10 +9,9 @@ const dataUrlToFile = async (part: FileUIPart): Promise<File | null> => {
     return null
   }
   try {
-    const response = await fetch(part.url)
-    const blob = await response.blob()
-    return new File([blob], part.filename || 'attachment', {
-      type: part.mediaType || blob.type || 'application/octet-stream',
+    const { bytes, mediaType } = dataUrlToBytes(part.url)
+    return new File([new Uint8Array(bytes)], part.filename || 'attachment', {
+      type: part.mediaType || mediaType || 'application/octet-stream',
     })
   }
   catch {
