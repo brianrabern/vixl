@@ -51,7 +51,7 @@ describe('use-queue-hydrate', () => {
   })
 
   it('restores a file from a data URL without fetch', async () => {
-    const fetchSpy = vi.fn()
+    const fetchSpy = vi.fn<() => Promise<Response>>()
     vi.stubGlobal('fetch', fetchSpy)
 
     const url = bytesToDataUrl(pngBytes, 'image/png')
@@ -102,7 +102,7 @@ describe('use-queue-hydrate', () => {
   })
 
   it('skips malformed data URLs without fetch and without addFiles', async () => {
-    const fetchSpy = vi.fn()
+    const fetchSpy = vi.fn<() => Promise<Response>>()
     vi.stubGlobal('fetch', fetchSpy)
 
     const { hydrateQueuedMessage } = useQueueHydrate()
