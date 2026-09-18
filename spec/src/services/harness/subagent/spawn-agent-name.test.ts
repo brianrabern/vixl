@@ -64,6 +64,7 @@ vi.mock('@/utils/link-abort-signal', () => ({
 }))
 
 import spawnSubagent from '@/services/harness/subagent/spawn'
+import { noPoll, visibleStatus } from '@/services/harness/guidance'
 
 const baseCtx = (): HarnessToolContext => ({
   projectRoot: '/tmp/project',
@@ -140,10 +141,50 @@ describe('spawn_subagent agentName validation', () => {
     expect(start && 'description' in start).toBe(false)
   })
 
-  it('instructs the parent to review results and steer rather than spawn duplicates', () => {
+  it('keeps kebab-case agentName when spawning a generic helper', async () => {
+    const events: Array<{ type: string; name?: string }> = []
+    const ctx = baseCtx()
+    ctx.onHarnessEvent = (event) => {
+      events.push(event as { type: string; name?: string })
+    }
+    const built = spawnSubagent(ctx)
+    const runner = built.execute as (
+      value: Record<string, unknown>,
+      options: { toolCallId: string },
+    ) => Promise<unknown>
+    await runner(
+      {
+        agentName: 'run-ci',
+        prompt: 'Run CI.',
+        mode: 'blocking',
+      },
+      { toolCallId: 'call-1' },
+    )
+    expect(events.find((event) => event.type === 'subagent-start')).toMatchObject({
+      name: 'run-ci',
+    })
+    expect(registerSubagent).toHaveBeenCalledWith(
+      'chat-1',
+      expect.any(String),
+      expect.any(AbortController),
+      expect.objectContaining({ agentName: 'run-ci' }),
+      expect.any(Object),
+    )
+  })
+
+  it('describes background spawn, visible status, and no-poll on the tool', () => {
     const built = spawnSubagent(baseCtx())
-    expect(built.description).toContain('steer_subagent')
-    expect(built.description).toContain('Review each returned result')
-    expect(built.description).toContain('as each background subagent finishes')
+    expect(built.description).toContain(visibleStatus('spawned'))
+    expect(built.description).toContain(noPoll)
+    expect(built.description).toContain('Background returns immediately')
+  })
+
+  it('describes accepted agentName forms on the input schema', () => {
+    const built = spawnSubagent(baseCtx())
+    const schema = built.inputSchema as unknown as {
+      shape: { agentName: { description?: string } }
+    }
+    expect(schema.shape.agentName.description).toContain('2-6 word verb phrase')
+    expect(schema.shape.agentName.description).toContain('Bare single words')
   })
 })

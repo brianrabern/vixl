@@ -24,6 +24,9 @@ const isReasonableVerbPhrase = (agentName: string): boolean => {
   return words.every((word) => /^[A-Za-z][A-Za-z0-9'-]*$/.test(word))
 }
 
+const normalizeVerbPhraseSeparators = (agentName: string): string =>
+  agentName.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim()
+
 const catalogNamesLabel = async (projectRoot: string | null): Promise<string> => {
   const catalog = await listAgentIndex(projectRoot).catch(() => [])
   const names = [...new Set(catalog.map((entry) => entry.name))].sort((left, right) =>
@@ -54,8 +57,15 @@ const validateSpawnAgentName = async (
     return resolved
   }
 
-  if (isReservedNonAgentSlug(agentName) || !isReasonableVerbPhrase(agentName)) {
+  if (isReservedNonAgentSlug(agentName)) {
     await throwUnknownAgent(projectRoot, agentName)
+  }
+
+  if (!isReasonableVerbPhrase(agentName)) {
+    const normalized = normalizeVerbPhraseSeparators(agentName)
+    if (!isReasonableVerbPhrase(normalized)) {
+      await throwUnknownAgent(projectRoot, agentName)
+    }
   }
 
   return null

@@ -24,6 +24,7 @@ vi.mock('@/services/harness/subagent/resume', () => ({
 }))
 
 import steerSubagent from '@/services/harness/subagent/steer'
+import { noPoll, visibleStatus } from '@/services/harness/guidance'
 import {
   drainSteers,
   resetInboxForTests,
@@ -34,6 +35,8 @@ import {
   resetSubagentRegistryForTests,
   resolve,
 } from '@/services/harness/subagent/registry'
+
+const resumeNote = `Resume started in the background. ${noPoll} ${visibleStatus('steered')}`
 
 const baseCtx = (): HarnessToolContext => ({
   projectRoot: '/tmp/project',
@@ -72,7 +75,7 @@ describe('steer_subagent routing', () => {
       subagentId: 'sub-1',
       name: 'explorer',
       status: 'running',
-      note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
+      note: resumeNote,
     })
   })
 
@@ -107,7 +110,7 @@ describe('steer_subagent routing', () => {
       subagentId: 'sub-1',
       name: 'explorer',
       status: 'running',
-      note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
+      note: resumeNote,
     })
     expect(resumeSubagent).toHaveBeenCalledWith(
       expect.objectContaining({ chatId: 'chat-1' }),
@@ -128,7 +131,7 @@ describe('steer_subagent routing', () => {
       subagentId: 'sub-1',
       name: 'explorer',
       status: 'running',
-      note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
+      note: resumeNote,
     })
     expect(resumeSubagent).toHaveBeenCalled()
   })

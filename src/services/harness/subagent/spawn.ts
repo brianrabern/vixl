@@ -1,5 +1,6 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import { noPoll, visibleStatus } from '@/services/harness/guidance'
 import {
   assertNotAwaitingPlanGo,
   getPlanExecutionSession,
@@ -21,13 +22,12 @@ import type { HarnessToolContext } from '@/types/harness/tool-context'
 
 const spawnSubagent = (ctx: HarnessToolContext) =>
   tool({
-    description:
-      'Spawn a subagent. background returns immediately; end your turn; harness resumes as each background subagent finishes; do not poll terminal_output. Review each returned result (blocking or background) critically. If you find slop, correctness issues, or incomplete work, call steer_subagent with rework instructions. Do not accept weak output or spawn a duplicate subagent.',
+    description: `Spawn a subagent. Background returns immediately. ${visibleStatus('spawned')} ${noPoll}`,
     inputSchema: z.object({
       agentName: z
         .string()
         .describe(
-          'Catalog name (frontmatter name, filename stem, or slug). Verb phrases only for generic helpers not in the catalog.',
+          'Catalog name, or a 2-6 word verb phrase for a generic helper (spaces, hyphens, or underscores). Bare single words are rejected unless a catalog defines them.',
         ),
       prompt: z.string().describe('Task instructions for the subagent'),
       mode: z
@@ -171,7 +171,7 @@ const spawnSubagent = (ctx: HarnessToolContext) =>
         return {
           subagentId,
           status: 'running',
-          note: 'Do not poll with terminal_output. End your turn; the harness resumes as each background subagent finishes. subagentId is not a shell_id.',
+          note: `${noPoll} ${visibleStatus('spawned')} subagentId is not a shell_id.`,
         }
       }
 

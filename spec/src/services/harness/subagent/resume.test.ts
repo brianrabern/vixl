@@ -28,6 +28,7 @@ vi.mock('@/services/harness/subagent/helpers', () => ({
 }))
 
 import resumeSubagent from '@/services/harness/subagent/resume'
+import { noPoll, visibleStatus } from '@/services/harness/guidance'
 import {
   getSubagent,
   listDeliverableBackgroundResults,
@@ -38,8 +39,7 @@ import {
   setMessages,
 } from '@/services/harness/subagent/registry'
 
-const resumeNote =
-  'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.'
+const resumeNote = `Resume started in the background. ${noPoll} ${visibleStatus('steered')}`
 
 const runningReturn = {
   subagentId: 'sub-1',

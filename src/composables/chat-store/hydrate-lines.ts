@@ -7,6 +7,7 @@ import hydrateTimelineBuilder, {
   type HydrateAccumulator,
 } from './hydrate-timeline-builder'
 import {
+  buildAssistantMessage,
   closeRunningTools,
   distributeLegacyStepText,
   extractReasoning,
@@ -42,24 +43,9 @@ export const createFlushTurn = (acc: HydrateAccumulator): (() => void) => {
       )
     if (hasContent) {
       const normalizedTurn = distributeLegacyStepText(acc.pendingTurn)
-      const reasoning = normalizedTurn.steps
-        .map((step) => step.reasoning)
-        .join('')
       acc.nextTimeline.push({ type: 'agent-turn', turn: normalizedTurn })
       hydrateTimelineBuilder.indexFlushedTurn(acc, normalizedTurn)
-      acc.nextMessages.push({
-        id: normalizedTurn.id,
-        role: 'assistant',
-        parts: [
-          ...(reasoning
-            ? [{ type: 'reasoning' as const, text: reasoning }]
-            : []),
-          { type: 'text' as const, text: normalizedTurn.text },
-        ],
-        ...(normalizedTurn.createdAt
-          ? { metadata: { createdAt: normalizedTurn.createdAt } }
-          : {}),
-      })
+      acc.nextMessages.push(buildAssistantMessage(normalizedTurn))
     }
     hydrateTimelineBuilder.mergePendingSubagents(acc)
     acc.pendingTurn = null

@@ -187,7 +187,6 @@ describe('resumeOrchestrator background waves', () => {
     expect(wakeNudge.role).toBe('user')
     expect(wakeNudge.content).toContain('explorer: mapped the repo')
     expect(wakeNudge.content).toContain('Completed:')
-    expect(wakeNudge.content).toContain('call steer_subagent')
     expect(wakeNudge.content).toContain('Do not say the subagents are still running')
   })
 
@@ -221,7 +220,6 @@ describe('resumeOrchestrator background waves', () => {
     }>
     const wakeNudge = modelMessages[modelMessages.length - 1]
     expect(wakeNudge?.content).toContain('still running: writer')
-    expect(wakeNudge?.content).toContain('call steer_subagent')
 
     resolve('sub-2', {
       subagentId: 'sub-2',

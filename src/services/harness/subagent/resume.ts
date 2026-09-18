@@ -1,5 +1,5 @@
 import type { ModelMessage } from 'ai'
-import linkAbortSignal from '@/utils/link-abort-signal'
+import { noPoll, visibleStatus } from '@/services/harness/guidance'
 import {
   emitSubagentResult,
   finishSubagentWithError,
@@ -11,6 +11,7 @@ import {
   setMessages,
 } from '@/services/harness/subagent/registry'
 import runSubagentGenerate from '@/services/harness/subagent/run-generate'
+import linkAbortSignal from '@/utils/link-abort-signal'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
 
 const resumeSubagent = async (
@@ -108,7 +109,7 @@ const resumeSubagent = async (
     subagentId,
     name: record.agentName,
     status: 'running',
-    note: 'Resume started in the background. Do not poll with terminal_output. End your turn; the harness resumes when the subagent finishes.',
+    note: `Resume started in the background. ${noPoll} ${visibleStatus('steered')}`,
   }
 }
 

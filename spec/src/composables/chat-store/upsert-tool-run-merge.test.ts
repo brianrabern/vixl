@@ -106,4 +106,65 @@ describe('upsertLocalToolRun merge across turns', () => {
     expect(turn2Tools.some((tool) => tool.toolCallId === 'tc-1')).toBe(false)
     expect(turn2Tools.some((tool) => tool.name === 'spawn_subagent')).toBe(false)
   })
+
+  it('projects a finished-turn tool result onto session.messages', async () => {
+    const { default: useChatStore, resetChatSessionsForTests } = await import(
+      '@/composables/use-chat-store'
+    )
+    resetChatSessionsForTests()
+    const store = useChatStore()
+    const session = store.forChat('proj', 'chat-a')
+
+    session.startAgentTurn('turn-1')
+    session.upsertLocalToolRun({
+      toolCallId: 'tc-1',
+      name: 'spawn_subagent',
+      status: 'running',
+      args: {
+        agentName: 'Sub one',
+        prompt: 'do the work',
+        mode: 'background',
+      },
+    })
+    session.finishAgentTurn()
+
+    const staleMessage = session.messages.value.find((message) => message.id === 'turn-1')
+    const staleTool = staleMessage?.parts.find(
+      (part) => part.type === 'dynamic-tool' && part.toolCallId === 'tc-1',
+    )
+    expect(staleTool).toMatchObject({
+      type: 'dynamic-tool',
+      toolName: 'spawn_subagent',
+      toolCallId: 'tc-1',
+    })
+    expect(staleTool).not.toMatchObject({
+      state: 'output-available',
+      output: { subagentId: 'sub-1', label: 'Sub one', status: 'done' },
+    })
+
+    session.upsertLocalToolRun({
+      toolCallId: 'tc-1',
+      name: 'spawn_subagent',
+      status: 'done',
+      result: { subagentId: 'sub-1', label: 'Sub one', status: 'done' },
+    })
+
+    const message = session.messages.value.find((item) => item.id === 'turn-1')
+    expect(message?.role).toBe('assistant')
+    const toolPart = message?.parts.find(
+      (part) => part.type === 'dynamic-tool' && part.toolCallId === 'tc-1',
+    )
+    expect(toolPart).toEqual({
+      type: 'dynamic-tool',
+      toolName: 'spawn_subagent',
+      toolCallId: 'tc-1',
+      state: 'output-available',
+      input: {
+        agentName: 'Sub one',
+        prompt: 'do the work',
+        mode: 'background',
+      },
+      output: { subagentId: 'sub-1', label: 'Sub one', status: 'done' },
+    })
+  })
 })

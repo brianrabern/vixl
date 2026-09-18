@@ -64,6 +64,7 @@ vi.mock('@/utils/link-abort-signal', () => ({
 }))
 
 import spawnSubagent from '@/services/harness/subagent/spawn'
+import { noPoll, visibleStatus } from '@/services/harness/guidance'
 
 const writeError = (mode: VixlChatMode): string =>
   `Write-capable subagents are not allowed in ${mode} mode. Spawn with capabilities: "read-only" (the default).`
@@ -86,6 +87,7 @@ const baseCtx = (mode: VixlChatMode): HarnessToolContext => ({
 const execute = async (
   mode: VixlChatMode,
   capabilities?: 'read-only' | 'write',
+  spawnMode: 'blocking' | 'background' = 'blocking',
 ): Promise<unknown> => {
   const built = spawnSubagent(baseCtx(mode))
   const runner = built.execute as (
@@ -95,7 +97,7 @@ const execute = async (
   const input: Record<string, unknown> = {
     agentName: 'Reading auth',
     prompt: 'Summarize the auth flow.',
-    mode: 'blocking',
+    mode: spawnMode,
   }
   if (capabilities !== undefined) {
     input.capabilities = capabilities
@@ -154,5 +156,12 @@ describe('spawn_subagent capability enforcement', () => {
       })
       expect(runSubagentGenerate).toHaveBeenCalledTimes(1)
     }
+  })
+
+  it('tells the parent to leave a visible status before ending a background spawn', async () => {
+    await expect(execute('agent', 'read-only', 'background')).resolves.toMatchObject({
+      status: 'running',
+      note: `${noPoll} ${visibleStatus('spawned')} subagentId is not a shell_id.`,
+    })
   })
 })

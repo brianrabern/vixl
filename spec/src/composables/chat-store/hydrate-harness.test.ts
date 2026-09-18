@@ -132,6 +132,213 @@ describe('hydrate-harness tool-run', () => {
     })
   })
 
+  it('projects flushed tool runs onto the assistant UIMessage', () => {
+    const acc = emptyAcc()
+    const flushTurn = createFlushTurn(acc)
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'a.ts' },
+        result: { content: 'ok' },
+        stepId: 'step-1',
+      },
+      flushTurn,
+    )
+    flushTurn()
+
+    expect(acc.nextMessages).toHaveLength(1)
+    expect(acc.nextMessages[0]?.parts).toEqual([
+      { type: 'step-start' },
+      {
+        type: 'dynamic-tool',
+        toolName: 'read_file',
+        toolCallId: 'tc-1',
+        state: 'output-available',
+        input: { path: 'a.ts' },
+        output: { content: 'ok' },
+      },
+    ])
+  })
+
+  it('patches the flushed assistant message when a later tool-run completes the committed tool', () => {
+    const acc = emptyAcc()
+    const flushTurn = createFlushTurn(acc)
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'spawn_subagent',
+        status: 'done',
+        args: { agentName: 'explore', prompt: 'look around' },
+        stepId: 'step-1',
+      },
+      flushTurn,
+    )
+    flushTurn()
+
+    const staleMessage = acc.nextMessages[0]
+    const staleTool = staleMessage?.parts.find(
+      (part) => part.type === 'dynamic-tool' && part.toolCallId === 'tc-1',
+    )
+    expect(staleTool).toMatchObject({
+      type: 'dynamic-tool',
+      toolName: 'spawn_subagent',
+      toolCallId: 'tc-1',
+      state: 'output-available',
+    })
+    expect(staleTool).not.toMatchObject({
+      output: { subagentId: 'sub-1', label: 'explore', status: 'done' },
+    })
+
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'spawn_subagent',
+        status: 'done',
+        result: { subagentId: 'sub-1', label: 'explore', status: 'done' },
+        stepId: 'step-2',
+      },
+      flushTurn,
+    )
+    flushTurn()
+
+    expect(acc.nextMessages).toHaveLength(1)
+    const message = acc.nextMessages[0]
+    expect(message?.role).toBe('assistant')
+    const toolPart = message?.parts.find(
+      (part) => part.type === 'dynamic-tool' && part.toolCallId === 'tc-1',
+    )
+    expect(toolPart).toEqual({
+      type: 'dynamic-tool',
+      toolName: 'spawn_subagent',
+      toolCallId: 'tc-1',
+      state: 'output-available',
+      input: { agentName: 'explore', prompt: 'look around' },
+      output: { subagentId: 'sub-1', label: 'explore', status: 'done' },
+    })
+  })
+
+  it('flushes assistant message text from step text when turn.text is empty', () => {
+    const acc = emptyAcc()
+    const flushTurn = createFlushTurn(acc)
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'a.ts' },
+        result: { content: 'ok' },
+        stepId: 'step-1',
+      },
+      flushTurn,
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'step-text',
+        stepId: 'step-1',
+        text: 'read the file',
+      },
+      flushTurn,
+    )
+    flushTurn()
+
+    expect(acc.nextMessages[0]?.parts).toEqual([
+      { type: 'text', text: 'read the file' },
+      { type: 'step-start' },
+      {
+        type: 'dynamic-tool',
+        toolName: 'read_file',
+        toolCallId: 'tc-1',
+        state: 'output-available',
+        input: { path: 'a.ts' },
+        output: { content: 'ok' },
+      },
+    ])
+  })
+
+  it('projects multi-step text and tools in chronological order', () => {
+    const acc = emptyAcc()
+    const flushTurn = createFlushTurn(acc)
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'grep',
+        status: 'done',
+        args: { pattern: 'TODO' },
+        result: { matches: 1 },
+        stepId: 'step-1',
+      },
+      flushTurn,
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'step-text',
+        stepId: 'step-1',
+        text: 'I will search.',
+      },
+      flushTurn,
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-2',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'a.ts' },
+        result: { content: 'ok' },
+        stepId: 'step-2',
+      },
+      flushTurn,
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'step-text',
+        stepId: 'step-2',
+        text: 'Opening the file.',
+      },
+      flushTurn,
+    )
+    flushTurn()
+
+    expect(acc.nextMessages[0]?.parts).toEqual([
+      { type: 'text', text: 'I will search.' },
+      { type: 'step-start' },
+      {
+        type: 'dynamic-tool',
+        toolName: 'grep',
+        toolCallId: 'tc-1',
+        state: 'output-available',
+        input: { pattern: 'TODO' },
+        output: { matches: 1 },
+      },
+      { type: 'text', text: 'Opening the file.' },
+      { type: 'step-start' },
+      {
+        type: 'dynamic-tool',
+        toolName: 'read_file',
+        toolCallId: 'tc-2',
+        state: 'output-available',
+        input: { path: 'a.ts' },
+        output: { content: 'ok' },
+      },
+    ])
+  })
+
   it('does not flip a committed done tool back to running', () => {
     const acc = emptyAcc()
     const flushTurn = createFlushTurn(acc)

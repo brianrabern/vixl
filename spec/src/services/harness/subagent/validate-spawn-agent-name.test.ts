@@ -69,10 +69,34 @@ describe('validateSpawnAgentName', () => {
     ).rejects.toThrow(/Unknown agentName "generalPurpose"/)
   })
 
-  it('rejects identifier-like names when a catalog exists', async () => {
+  it('allows a kebab-case verb phrase when the catalog has no match', async () => {
+    resolveAgentDefinition.mockResolvedValue(null)
+    await expect(validateSpawnAgentName('/tmp/project', 'run-ci')).resolves.toBeNull()
+    expect(listAgentIndex).not.toHaveBeenCalled()
+  })
+
+  it('allows an underscored verb phrase when the catalog has no match', async () => {
     resolveAgentDefinition.mockResolvedValue(null)
     await expect(
-      validateSpawnAgentName('/tmp/project', 'not-a-real-agent'),
-    ).rejects.toThrow(/Valid catalog names: explorer/)
+      validateSpawnAgentName('/tmp/project', 'review_bugbot'),
+    ).resolves.toBeNull()
+    expect(listAgentIndex).not.toHaveBeenCalled()
+  })
+
+  it('rejects a single-word name that is not in the catalog', async () => {
+    resolveAgentDefinition.mockResolvedValue(null)
+    await expect(validateSpawnAgentName('/tmp/project', 'explore')).rejects.toThrow(
+      /Unknown agentName "explore".*Valid catalog names: explorer/,
+    )
+  })
+
+  it('rejects a 7 word verb phrase', async () => {
+    resolveAgentDefinition.mockResolvedValue(null)
+    await expect(
+      validateSpawnAgentName(
+        '/tmp/project',
+        'one two three four five six seven',
+      ),
+    ).rejects.toThrow(/Unknown agentName "one two three four five six seven"/)
   })
 })

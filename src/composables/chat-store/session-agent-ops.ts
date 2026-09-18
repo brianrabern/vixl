@@ -227,6 +227,7 @@ const createSessionAgentOps = (session: ChatSession): TurnOps => {
       const updatedStep = upsertToolInStep(existing.step, run)
       const updatedTurn = patchStep(existing.turn, existing.step.id, updatedStep)
       updateTimelineTurn(session, updatedTurn)
+      updateAssistantMessage(session, updatedTurn)
       return
     }
     const current = ensureActiveTurn()

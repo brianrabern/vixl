@@ -1,3 +1,4 @@
+import { noPoll } from '@/services/harness/guidance'
 import {
   createAgentShell,
   getAgentShell,
@@ -125,7 +126,7 @@ export const readTerminalOutput = async (
 ): Promise<Record<string, unknown>> => {
   if (hasSubagent(shellId)) {
     throw new Error(
-      'That id is a subagent, not a shell. Do not poll subagents with terminal_output. End your turn; the harness resumes when background subagents finish.',
+      `That id is a subagent, not a shell. ${noPoll}`,
     )
   }
 

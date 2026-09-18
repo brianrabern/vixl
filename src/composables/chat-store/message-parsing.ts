@@ -3,6 +3,7 @@ import type { AgentStep } from '@/types/chat/agent-step'
 import type { AgentTurn } from '@/types/chat/agent-turn'
 import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { ToolRun } from '@/types/harness/tool-run'
+import toolRunToUiParts from '@/utils/tool-run-to-ui-parts'
 import type { ChatSession, MessagePart } from './types'
 
 export const parsePart = (part: Record<string, unknown>): MessagePart => {
@@ -97,30 +98,46 @@ export const updateTimelineTurn = (session: ChatSession, turn: AgentTurn): void 
   session.timeline.value = [...items, { type: 'agent-turn', turn }]
 }
 
+const assistantTextFromTurn = (turn: AgentTurn): string =>
+  turn.text.trim() ||
+  turn.steps
+    .map((step) => step.text.trim())
+    .filter((value) => value.length > 0)
+    .join('\n\n')
+
+const assistantPartsFromTurn = (turn: AgentTurn): MessagePart[] => {
+  const parts: MessagePart[] = []
+  for (const step of turn.steps) {
+    if (step.reasoning) {
+      parts.push({ type: 'reasoning', text: step.reasoning })
+    }
+    if (step.text.trim()) {
+      parts.push({ type: 'text', text: step.text })
+    }
+    parts.push(...toolRunToUiParts(step))
+  }
+  if (turn.text.trim()) {
+    parts.push({ type: 'text', text: turn.text })
+  }
+  return parts
+}
+
+export const buildAssistantMessage = (turn: AgentTurn): UIMessage => ({
+  id: turn.id,
+  role: 'assistant',
+  parts: assistantPartsFromTurn(turn),
+  ...(turn.createdAt ? { metadata: { createdAt: turn.createdAt } } : {}),
+})
+
 export const updateAssistantMessage = (session: ChatSession, turn: AgentTurn): void => {
   const reasoning = turn.steps.map((step) => step.reasoning).join('')
-  const text =
-    turn.text.trim() ||
-    turn.steps
-      .map((step) => step.text.trim())
-      .filter((value) => value.length > 0)
-      .join('\n\n')
-  if (!reasoning && !text) {
+  const text = assistantTextFromTurn(turn)
+  const hasTools = turn.steps.some((step) => step.tools.length > 0)
+  if (!reasoning && !text && !hasTools) {
     return
   }
-  const parts: MessagePart[] = []
-  if (reasoning) {
-    parts.push({ type: 'reasoning', text: reasoning })
-  }
-  parts.push({ type: 'text', text })
-
-  const index = session.messages.value.findIndex((message) => message.id === turn.id)
-  const message: UIMessage = {
-    id: turn.id,
-    role: 'assistant',
-    parts,
-    ...(turn.createdAt ? { metadata: { createdAt: turn.createdAt } } : {}),
-  }
+  const message = buildAssistantMessage(turn)
+  const index = session.messages.value.findIndex((item) => item.id === turn.id)
   if (index >= 0) {
     session.messages.value = session.messages.value.map((item, itemIndex) =>
       itemIndex === index ? message : item,
@@ -199,23 +216,7 @@ export const rebuildMessagesFromTimeline = (items: ChatTimelineItem[]): UIMessag
     if (item.type !== 'agent-turn') {
       continue
     }
-    const turn = item.turn
-    const reasoning = turn.steps.map((step) => step.reasoning).join('')
-    const text =
-      turn.text.trim() ||
-      turn.steps
-        .map((step) => step.text.trim())
-        .filter((value) => value.length > 0)
-        .join('\n\n')
-    nextMessages.push({
-      id: turn.id,
-      role: 'assistant',
-      parts: [
-        ...(reasoning ? [{ type: 'reasoning' as const, text: reasoning }] : []),
-        { type: 'text' as const, text },
-      ],
-      ...(turn.createdAt ? { metadata: { createdAt: turn.createdAt } } : {}),
-    })
+    nextMessages.push(buildAssistantMessage(item.turn))
   }
   return nextMessages
 }

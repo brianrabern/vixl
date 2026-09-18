@@ -1,0 +1,74 @@
+import type { UIMessage } from 'ai'
+import type { AgentStep } from '@/types/chat/agent-step'
+import type { ToolRun } from '@/types/harness/tool-run'
+import formatUnknownError from '@/utils/format-unknown-error'
+
+const RESULT_CHAR_CAP = 8000
+const INCOMPLETE_TOOL_MESSAGE = 'Tool did not complete'
+
+const serializeProjectedResult = (result: unknown): string => {
+  if (typeof result === 'string') {
+    return result
+  }
+  try {
+    const json = JSON.stringify(result)
+    return typeof json === 'string' ? json : 'null'
+  } catch {
+    return String(result)
+  }
+}
+
+const capText = (text: string): string => {
+  if (text.length <= RESULT_CHAR_CAP) {
+    return text
+  }
+  const extra = text.length - RESULT_CHAR_CAP
+  return `${text.slice(0, RESULT_CHAR_CAP)}... [elided ${extra} chars]`
+}
+
+const capProjectedResult = (result: unknown): unknown => {
+  const serialized = serializeProjectedResult(result)
+  if (serialized.length <= RESULT_CHAR_CAP) {
+    return result
+  }
+  return capText(serialized)
+}
+
+const errorTextForRun = (run: ToolRun): string => {
+  if (run.status === 'running') {
+    return INCOMPLETE_TOOL_MESSAGE
+  }
+  return capText(formatUnknownError(run.result))
+}
+
+const projectToolRun = (run: ToolRun): UIMessage['parts'][number] => {
+  if (run.status === 'done') {
+    return {
+      type: 'dynamic-tool',
+      toolName: run.name,
+      toolCallId: run.toolCallId,
+      state: 'output-available',
+      input: run.args,
+      output: capProjectedResult(run.result),
+    }
+  }
+  return {
+    type: 'dynamic-tool',
+    toolName: run.name,
+    toolCallId: run.toolCallId,
+    state: 'output-error',
+    input: run.args,
+    errorText: errorTextForRun(run),
+  }
+}
+
+export default (step: AgentStep): UIMessage['parts'] => {
+  if (step.tools.length === 0) {
+    return []
+  }
+  const parts: UIMessage['parts'] = [{ type: 'step-start' }]
+  for (const run of step.tools) {
+    parts.push(projectToolRun(run))
+  }
+  return parts
+}

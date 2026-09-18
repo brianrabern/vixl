@@ -8,7 +8,11 @@ import type { TodoItem, HarnessEvent } from '@/types/harness/harness-event'
 import type { ToolRun } from '@/types/harness/tool-run'
 import closeIncompleteSubagentTools from './close-incomplete-subagent-tools'
 import applyHydrateSubagentEvent from './hydrate-apply-subagent-event'
-import { patchStep, upsertToolInStep } from './message-parsing'
+import {
+  buildAssistantMessage,
+  patchStep,
+  upsertToolInStep,
+} from './message-parsing'
 
 export type HydrateAccumulator = {
   nextMessages: UIMessage[]
@@ -219,6 +223,12 @@ const upsertCommittedTool = (acc: HydrateAccumulator, run: ToolRun): boolean => 
   }
   const updatedTurn = patchStep(item.turn, step.id, upsertToolInStep(step, run))
   acc.nextTimeline[location.itemIndex] = { type: 'agent-turn', turn: updatedTurn }
+  const messageIndex = acc.nextMessages.findIndex(
+    (message) => message.id === updatedTurn.id,
+  )
+  if (messageIndex >= 0) {
+    acc.nextMessages[messageIndex] = buildAssistantMessage(updatedTurn)
+  }
   return true
 }
 
