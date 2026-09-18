@@ -9,7 +9,6 @@
   <a href="https://vixl.app/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Docs" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://vixl.app/"><img src="https://img.shields.io/badge/status-beta-blue.svg" alt="Status: Beta" /></a>
-  <a href="https://github.com/vixl-ai/vixl/stargazers"><img src="https://img.shields.io/github/stars/vixl-ai/vixl?style=flat" alt="GitHub stars" /></a>
 </p>
 
 <p align="center">
@@ -61,13 +60,9 @@
 
 ---
 
-Vixl is an open alternative to Antigravity, Cursor, and VS Code agents.
+Save cost against Cursor, Antigravity, and VS Code Agents by taking advantage of local and routers.
 
-Save on token costs by utilizing routers, sales, and model mixing.
-
-Local first design, built originally for using Qwen on a Halo Strix.
-
-[View the estimated token counts](./spec/src/services/context/system-prompt-token-snapshot.test.ts)
+Get faster local inference speeds with progressive tool discovery and tiny system prompts.
 
 ## Getting started
 
@@ -298,8 +293,11 @@ Each exists at personal and project level. When both define the same thing, the 
 
 ## Roadmap
 
-1. Image edit and create support
-2. Theme, glass, and deeper personalization
+In no particular order:
+
+- Image edit and create support
+- Deep theme support
+- SSH support
 
 ## Contributing
 
