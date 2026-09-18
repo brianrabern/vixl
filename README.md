@@ -6,7 +6,6 @@
 
 <p align="center">
   <a href="https://github.com/vixl-ai/vixl/actions/workflows/ci.yml"><img src="https://github.com/vixl-ai/vixl/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/vixl-ai/vixl/actions/workflows/deploy-docs.yml"><img src="https://github.com/vixl-ai/vixl/actions/workflows/deploy-docs.yml/badge.svg" alt="Deploy docs" /></a>
   <a href="https://vixl.app/"><img src="https://img.shields.io/badge/docs-GitHub%20Pages-blue" alt="Docs" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://vixl.app/"><img src="https://img.shields.io/badge/status-beta-blue.svg" alt="Status: Beta" /></a>
@@ -53,6 +52,12 @@
     </td>
   </tr>
 </table>
+
+---
+
+<p align="center">
+  <img src="./docs/media/readme/screenshot.png" alt="vixl desktop app" />
+</p>
 
 ---
 
@@ -173,7 +178,7 @@ Home is the screen vixl opens on. Type a prompt in the text box at the bottom an
 Before you send, the bar under the input lets you set up the chat:
 
 - **Project**: **No project** (not tied to a repo) or one of your added projects.
-- **Mode**: **Agent**, **Ask**, **Orchestrator**, or **Plan**. See [Chat view](#chat-view).
+- **Mode**: **Agent**, **Ask**, **Orchestrator**, or **Plan**.
 - **Model**: overrides your default model for this chat only.
 - **Permissions**: how often the agent asks before it acts.
 - **Attachments**: add images to the prompt.
@@ -267,7 +272,7 @@ Once connected, agents can call the server's tools in any chat.
 <details id="agents-and-chat-modes">
 <summary><strong>Agents and chat modes</strong></summary>
 
-The four chat modes (**Agent**, **Ask**, **Orchestrator**, **Plan**) are built in. See [Chat view](#chat-view).
+The four chat modes (**Agent**, **Ask**, **Orchestrator**, **Plan**) are built in.
 
 Custom agents are your own: markdown files in `.vixl/agents/` with a name, description, and optional model and tools. Create one with **New agent**, then run it with `/` in a chat. Custom agents run as sub-agents, so a chat can hand work to them.
 
