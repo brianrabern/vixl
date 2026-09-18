@@ -186,6 +186,28 @@ describe('restore-file-checkpoints aggregation', () => {
     expect(afterU2.map((item) => item.path)).toEqual(['c.ts'])
   })
 
+  it('includes a late subagent after the last user message even if spawned earlier', () => {
+    const timeline: ChatTimelineItem[] = [
+      userItem('u1', 'one'),
+      {
+        type: 'agent-turn',
+        turn: makeTurn('t1', [pathDiff('old.ts', 'update')]),
+      },
+      userItem('u2', 'two'),
+      {
+        type: 'agent-turn',
+        turn: makeTurn('t2', [pathDiff('last.ts', 'update')]),
+      },
+      makeSubagent('sub-1', [pathDiff('late-sub.ts', 'create')]),
+    ]
+
+    const preview = collectMutationsAfterUserMessage(timeline, 'u2')
+    const targets = resolveBaselinesForRevert(timeline, 'u2')
+
+    expect(preview.map((item) => item.path)).toEqual(['last.ts', 'late-sub.ts'])
+    expect(targets.map((target) => target.path)).toEqual(['last.ts', 'late-sub.ts'])
+  })
+
   it('attributes a subagent-only path to the user message in effect', () => {
     const timeline: ChatTimelineItem[] = [
       userItem('u1', 'one'),

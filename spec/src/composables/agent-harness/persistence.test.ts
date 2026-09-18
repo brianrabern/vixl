@@ -22,6 +22,7 @@ vi.mock('@/services/harness/restore-file-checkpoints', () => ({
 }))
 
 import createPersistence from '@/composables/agent-harness/persistence'
+import { collectMutationsAfterUserMessage } from '@/services/harness/restore-file-checkpoints'
 
 const imageFile: FileUIPart = {
   type: 'file',
@@ -158,6 +159,43 @@ describe('retryLastTurn', () => {
     })
 
     expect(send).not.toHaveBeenCalled()
+  })
+})
+
+describe('getLastTurnFileMutations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('delegates to collectMutationsAfterUserMessage with the last user message id', () => {
+    const lastUser: UIMessage = {
+      id: 'user-last',
+      role: 'user',
+      parts: [{ type: 'text', text: 'retry' }],
+    }
+    const preview = [
+      { path: 'late-sub.ts', operation: 'create' as const, additions: 1, deletions: 0 },
+    ]
+    vi.mocked(collectMutationsAfterUserMessage).mockReturnValue(preview)
+    const state = buildState(lastUser)
+    const persistence = createPersistence(state, {
+      send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    expect(persistence.getLastTurnFileMutations()).toEqual(preview)
+    expect(collectMutationsAfterUserMessage).toHaveBeenCalledWith(
+      state.session.timeline.value,
+      'user-last',
+    )
+  })
+
+  it('returns an empty list when there is no last user message', () => {
+    const persistence = createPersistence(buildState(null), {
+      send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    expect(persistence.getLastTurnFileMutations()).toEqual([])
+    expect(collectMutationsAfterUserMessage).not.toHaveBeenCalled()
   })
 })
 
