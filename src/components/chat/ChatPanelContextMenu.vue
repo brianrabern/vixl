@@ -88,7 +88,7 @@ const handleExportTranscript = async (): Promise<void> => {
 
   exporting.value = true
   try {
-    const transcript = buildChatTranscript(chatStore.messages.value)
+    const transcript = buildChatTranscript(chatStore.timeline.value)
     const filename = `${sanitizeExportFilename(chatTitle.value)}.txt`
     const saved = await saveTextFileWithDialog(filename, transcript)
     if (saved) {
