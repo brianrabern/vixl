@@ -27,6 +27,8 @@ import wrapNestedTools from '@/services/harness/subagent/wrap-nested-tools'
 import prepareCompactStep from '@/services/harness/subagent/prepare-compact-step'
 import { drainSteers } from '@/services/harness/subagent/inbox'
 import { appendMessages, getSubagent, setMessages } from '@/services/harness/subagent/registry'
+import deriveToolArtifact from '@/services/harness/derive-tool-artifact'
+import { deriveToolDiffs } from '@/services/harness/orchestrator/helpers'
 import type { HarnessEvent } from '@/types/harness/harness-event'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
 
@@ -253,20 +255,22 @@ const runSubagentGenerate = async (args: {
     },
     onToolExecutionEnd: (event) => {
       const { toolCall, toolOutput } = event
-      if (toolOutput.type === 'tool-error') {
-        emitNestedEvent({
-          type: 'tool-result',
-          toolCallId: toolCall.toolCallId,
-          result: { error: toolOutput.error },
-          isError: true,
-        })
-        return
-      }
+      const isError = toolOutput.type === 'tool-error'
+      const result = isError ? { error: toolOutput.error } : toolOutput.output
+      const artifact = deriveToolArtifact(
+        toolCall.toolName,
+        result,
+        toolCall.input,
+        isError,
+      )
+      const diffs = isError ? undefined : deriveToolDiffs(result)
       emitNestedEvent({
         type: 'tool-result',
         toolCallId: toolCall.toolCallId,
-        result: toolOutput.output,
-        isError: false,
+        result,
+        isError,
+        ...(artifact ? { artifact } : {}),
+        ...(diffs ? { diffs } : {}),
       })
     },
   })

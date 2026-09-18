@@ -27,7 +27,10 @@ import {
 import formatToolGroupHeader from '@/utils/format-tool-group-header'
 import resolveSpawnSubagent from '@/utils/resolve-spawn-subagent'
 import segmentStepTools from '@/utils/segment-step-tools'
-import { aggregateTurnFileDiffs } from '@/services/harness/restore-file-checkpoints'
+import {
+  aggregateSubagentFileDiffs,
+  aggregateTurnFileDiffs,
+} from '@/services/harness/restore-file-checkpoints'
 
 const props = defineProps<{
   turn: AgentTurn
@@ -52,7 +55,22 @@ const showActivity = computed(
   () => typeof props.activityLabel === 'string' && props.activityLabel.length > 0,
 )
 
-const fileChanges = computed(() => aggregateTurnFileDiffs(props.turn))
+const fileChanges = computed(() => {
+  let changes = aggregateTurnFileDiffs(props.turn)
+  for (const step of props.turn.steps) {
+    for (const run of step.tools) {
+      if (run.name !== 'spawn_subagent') {
+        continue
+      }
+      const subagent = resolveSubagent(run)
+      if (!isMappedSubagent(run, subagent)) {
+        continue
+      }
+      changes = aggregateSubagentFileDiffs(subagent, changes)
+    }
+  }
+  return changes
+})
 
 const showFilesChanged = computed(
   () => !isStreaming.value && fileChanges.value.length > 0,
@@ -91,6 +109,13 @@ const resolveSubagent = (run: ToolRun): SubagentTimelineItem =>
     props.subagentsByToolCallId ?? new Map(),
     props.subagentsById ?? new Map(),
   )
+
+const isMappedSubagent = (
+  run: ToolRun,
+  subagent: SubagentTimelineItem,
+): boolean =>
+  props.subagentsByToolCallId?.get(run.toolCallId) === subagent ||
+  props.subagentsById?.get(subagent.subagentId) === subagent
 </script>
 
 <template>

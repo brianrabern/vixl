@@ -1,61 +1,39 @@
-import countDiffLines from '@/utils/count-diff-lines'
-import resolveFileDiffHunks from '@/utils/resolve-file-diff-hunks'
+import aggregateToolRunFileDiffs from '@/services/harness/aggregate-tool-run-file-diffs'
 import { fileCheckpointRestore } from '@/services/vixl/vixl-tauri'
 import type { AgentTurn } from '@/types/chat/agent-turn'
-import type { ChatTimelineItem } from '@/types/chat/chat-timeline-item'
-import type { FileDiff } from '@/types/harness/file-diff'
+import type {
+  ChatTimelineItem,
+  SubagentTimelineItem,
+} from '@/types/chat/chat-timeline-item'
 import type {
   AggregatedTurnFileChange,
   FileCheckpointRestoreResult,
   FileCheckpointRestoreTarget,
 } from '@/types/harness/file-checkpoint'
 
-const operationPriority: Record<AggregatedTurnFileChange['operation'], number> = {
-  create: 0,
-  update: 1,
-  rename: 2,
-  delete: 3,
-}
+const toolsFromTurn = (turn: AgentTurn) =>
+  turn.steps.flatMap((step) => step.tools)
 
 export const aggregateTurnFileDiffs = (
   turn: AgentTurn,
+): AggregatedTurnFileChange[] => aggregateToolRunFileDiffs(toolsFromTurn(turn))
+
+export const aggregateSubagentFileDiffs = (
+  subagent: SubagentTimelineItem,
+  existing: AggregatedTurnFileChange[] = [],
+): AggregatedTurnFileChange[] =>
+  aggregateToolRunFileDiffs(subagent.tools, existing)
+
+const aggregatedChangesForItem = (
+  item: ChatTimelineItem,
 ): AggregatedTurnFileChange[] => {
-  const byPath = new Map<string, AggregatedTurnFileChange>()
-
-  for (const step of turn.steps) {
-    for (const tool of step.tools) {
-      if (tool.status !== 'done' || !tool.diffs?.length) {
-        continue
-      }
-      for (const diff of tool.diffs) {
-        mergeDiff(byPath, diff)
-      }
-    }
+  if (item.type === 'agent-turn') {
+    return aggregateTurnFileDiffs(item.turn)
   }
-
-  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path))
-}
-
-const mergeDiff = (
-  byPath: Map<string, AggregatedTurnFileChange>,
-  diff: FileDiff,
-): void => {
-  const counts = countDiffLines(resolveFileDiffHunks(diff))
-  const existing = byPath.get(diff.path)
-  if (!existing) {
-    byPath.set(diff.path, {
-      path: diff.path,
-      operation: diff.operation,
-      additions: counts.additions,
-      deletions: counts.deletions,
-    })
-    return
+  if (item.type === 'subagent') {
+    return aggregateSubagentFileDiffs(item)
   }
-  existing.additions += counts.additions
-  existing.deletions += counts.deletions
-  if (operationPriority[diff.operation] > operationPriority[existing.operation]) {
-    existing.operation = diff.operation
-  }
+  return []
 }
 
 export const collectMutationsAfterUserMessage = (
@@ -69,31 +47,24 @@ export const collectMutationsAfterUserMessage = (
     return []
   }
 
-  const byPath = new Map<string, AggregatedTurnFileChange>()
+  let changes: AggregatedTurnFileChange[] = []
   for (const item of timeline.slice(index + 1)) {
-    if (item.type !== 'agent-turn') {
+    if (item.type === 'agent-turn') {
+      changes = aggregateToolRunFileDiffs(toolsFromTurn(item.turn), changes)
       continue
     }
-    for (const change of aggregateTurnFileDiffs(item.turn)) {
-      const existing = byPath.get(change.path)
-      if (!existing) {
-        byPath.set(change.path, { ...change })
-        continue
-      }
-      existing.additions += change.additions
-      existing.deletions += change.deletions
-      if (operationPriority[change.operation] > operationPriority[existing.operation]) {
-        existing.operation = change.operation
-      }
+    if (item.type === 'subagent') {
+      changes = aggregateSubagentFileDiffs(item, changes)
     }
   }
 
-  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path))
+  return changes
 }
 
 /**
- * For each path mutated after boundary message M, pick the userMessageId of the
- * first agent turn after M that touched that path (baseline key).
+ * For each path mutated after boundary message M, pick the userMessageId in
+ * effect when the first agent-turn or subagent item after M touched that path
+ * (baseline key).
  */
 export const resolveBaselinesForRevert = (
   timeline: ChatTimelineItem[],
@@ -114,10 +85,7 @@ export const resolveBaselinesForRevert = (
       currentUserMessageId = item.message.id
       continue
     }
-    if (item.type !== 'agent-turn') {
-      continue
-    }
-    for (const change of aggregateTurnFileDiffs(item.turn)) {
+    for (const change of aggregatedChangesForItem(item)) {
       if (!targets.has(change.path)) {
         targets.set(change.path, currentUserMessageId)
       }
@@ -131,7 +99,7 @@ export const resolveBaselinesForRevert = (
 
 /**
  * Restore files for an agent turn: use the preceding user message as baseline key,
- * and include paths from this turn and all later turns.
+ * and include paths from this turn and all later mutations.
  */
 export const resolveBaselinesForAgentTurn = (
   timeline: ChatTimelineItem[],

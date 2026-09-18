@@ -5,6 +5,7 @@ import type { FileCheckpointFilePolicy } from '@/types/harness/file-checkpoint'
 import type { FileUIPart, UIMessage } from 'ai'
 import type { ContextMention } from '@/types/harness/context-mention'
 import restoreFileCheckpoints, {
+  aggregateSubagentFileDiffs,
   aggregateTurnFileDiffs,
   collectMutationsAfterUserMessage,
   resolveBaselinesForAgentTurn,
@@ -231,11 +232,20 @@ export default (state: AgentHarnessState, deps: PersistenceDeps) => {
     collectMutationsAfterUserMessage(session.timeline.value, messageId)
 
   const getLastTurnFileMutations = () => {
-    for (let index = session.timeline.value.length - 1; index >= 0; index -= 1) {
-      const item = session.timeline.value[index]
-      if (item?.type === 'agent-turn') {
-        return aggregateTurnFileDiffs(item.turn)
+    const timeline = session.timeline.value
+    for (let index = timeline.length - 1; index >= 0; index -= 1) {
+      const item = timeline[index]
+      if (item?.type !== 'agent-turn') {
+        continue
       }
+      let changes = aggregateTurnFileDiffs(item.turn)
+      for (let later = index + 1; later < timeline.length; later += 1) {
+        const laterItem = timeline[later]
+        if (laterItem?.type === 'subagent') {
+          changes = aggregateSubagentFileDiffs(laterItem, changes)
+        }
+      }
+      return changes
     }
     return []
   }

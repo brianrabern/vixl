@@ -98,6 +98,7 @@ declare module 'vue' {
     ChatStackPillBar: typeof import('./components/chat/ChatStackPillBar.vue')['default']
     ChatSubagentBlock: typeof import('./components/chat/ChatSubagentBlock.vue')['default']
     ChatSubagentStack: typeof import('./components/chat/ChatSubagentStack.vue')['default']
+    ChatSubagentUsage: typeof import('./components/chat/ChatSubagentUsage.vue')['default']
     ChatTerminalToolRun: typeof import('./components/chat/ChatTerminalToolRun.vue')['default']
     ChatThread: typeof import('./components/chat/ChatThread.vue')['default']
     ChatThreadContent: typeof import('./components/chat/ChatThreadContent.vue')['default']

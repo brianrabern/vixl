@@ -10,6 +10,7 @@ import ChatCodegraphStatusChip from '@/components/chat/ChatCodegraphStatusChip.v
 import ChatChatPanelContextMenu from '@/components/chat/ChatPanelContextMenu.vue'
 import ChatPendingApprovals from '@/components/chat/ChatPendingApprovals.vue'
 import ChatSubagentStack from '@/components/chat/ChatSubagentStack.vue'
+import ChatSubagentUsage from '@/components/chat/ChatSubagentUsage.vue'
 import ChatStackPillBar from '@/components/chat/ChatStackPillBar.vue'
 import useAgentThreadView from '@/composables/agent-thread-view'
 import type { ChatStackId } from '@/types/chat/chat-stack-id'
@@ -22,6 +23,7 @@ const {
   threadReady,
   projectSlug,
   chatId,
+  subagentId,
   isSubagentView,
   threadKey,
   harnessStatus,
@@ -203,6 +205,15 @@ const pills = computed(() => {
             @toggle="toggleStack"
           />
         </template>
+        <ChatSubagentUsage
+          v-if="
+            isSubagentView &&
+            harnessStatus !== 'streaming' &&
+            harnessStatus !== 'submitted'
+          "
+          :subagent-id="subagentId"
+          class="mb-2"
+        />
         <ChatPromptInput
           ref="chatPromptInputRef"
           :key="threadKey"

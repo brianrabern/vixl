@@ -1,4 +1,4 @@
-import { ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import type { ChatStatus } from 'ai'
 import type { AgentHarnessOptions } from '@/types/harness/agent-harness-options'
 import type { HarnessEvent } from '@/types/harness/harness-event'
@@ -18,6 +18,7 @@ import useFleetSidebar from '@/composables/use-fleet-sidebar'
 import useWorkbenchStore from '@/composables/use-workbench-store'
 import useMcpServers from '@/composables/use-mcp-servers'
 import useMessageQueue from '@/composables/use-message-queue'
+import aggregatesBySubagentId from '@/services/billing/aggregates-by-subagent-id'
 import createApprovals from './approvals'
 import createEvents from './events'
 import createHelpers from './helpers'
@@ -121,6 +122,9 @@ const createAgentHarness = (options: AgentHarnessOptions) => {
     handleEvent: events.handleEvent,
     persistPermission: approvals.persistPermission,
   })
+  const usageBySubagentId = computed(() =>
+    aggregatesBySubagentId(state.billableUsageRecords.value),
+  )
 
   return {
     status: state.status,
@@ -134,6 +138,7 @@ const createAgentHarness = (options: AgentHarnessOptions) => {
     liveEvents: state.liveEvents,
     billableUsageRecords: state.billableUsageRecords,
     turnUsageByTurnId: state.turnUsageByTurnId,
+    usageBySubagentId,
     queuedMessages: messageQueue.items,
     compacting: state.compacting,
     isWaitingOnBackground: attention.isWaitingOnBackground,

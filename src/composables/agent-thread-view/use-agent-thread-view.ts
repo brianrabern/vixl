@@ -204,6 +204,7 @@ export default () => {
     threadReady,
     projectSlug,
     chatId,
+    subagentId,
     isSubagentView,
     threadKey,
     harnessStatus,
