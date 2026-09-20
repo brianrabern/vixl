@@ -1,5 +1,6 @@
 const SERVER_ICON_FILES: Record<string, string> = {
   typescript: 'index.ts',
+  'typescript-classic': 'index.ts',
   vue: 'App.vue',
   json: 'data.json',
   yaml: 'config.yaml',

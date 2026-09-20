@@ -129,7 +129,7 @@ const {
               </div>
             </div>
             <div class="flex shrink-0 items-center gap-0.5">
-              <Tooltip>
+              <Tooltip v-if="entry.canDisable">
                 <TooltipTrigger as-child>
                   <Button
                     variant="ghost"

@@ -1,4 +1,4 @@
-import { computed, type ComputedRef, type Ref } from 'vue'
+import { computed, ref, type ComputedRef, type Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import mcpRuntime from '@/services/mcp/mcp-runtime'
 import {
@@ -122,6 +122,8 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
     }
   }
 
+  const createParentOverride = ref<string | null>(null)
+
   const createParentPath = computed((): string => {
     const path = s.selectedPath.value
     if (!path) {
@@ -139,19 +141,31 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
     if (!open) {
       s.createName.value = ''
       s.creating.value = false
+      createParentOverride.value = null
     }
   }
 
-  const handleNewFile = (): void => {
-    s.createDialogMode.value = 'file'
+  const openCreateDialog = (
+    mode: 'file' | 'folder',
+    parentDirPath?: string,
+  ): void => {
+    createParentOverride.value =
+      typeof parentDirPath === 'string' ? parentDirPath : null
+    s.createDialogMode.value = mode
     s.createName.value = ''
     s.createDialogOpen.value = true
   }
 
-  const handleNewFolder = (): void => {
-    s.createDialogMode.value = 'folder'
-    s.createName.value = ''
-    s.createDialogOpen.value = true
+  const handleNewFile = (parentDirPath?: string): void => {
+    openCreateDialog('file', parentDirPath)
+  }
+
+  const handleNewFolder = (parentDirPath?: string): void => {
+    openCreateDialog('folder', parentDirPath)
+  }
+
+  const startCreate = (mode: 'file' | 'folder', parentDirPath: string): void => {
+    openCreateDialog(mode, parentDirPath)
   }
 
   const handleCreateConfirm = async (): Promise<void> => {
@@ -165,7 +179,8 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
       return
     }
 
-    const destination = joinPath(createParentPath.value, name)
+    const parentDir = createParentOverride.value ?? createParentPath.value
+    const destination = joinPath(parentDir, name)
     const mode = s.createDialogMode.value
     s.creating.value = true
     try {
@@ -179,6 +194,10 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
           allowSensitive: true,
         })
       }
+      const nextExpanded = new Set(s.expandedPaths.value)
+      nextExpanded.add(parentDir)
+      s.expandedPaths.value = nextExpanded
+      createParentOverride.value = null
       s.createDialogOpen.value = false
       s.createName.value = ''
       await s.refresh()
@@ -244,6 +263,7 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
     handleCreateDialogOpenChange,
     handleNewFile,
     handleNewFolder,
+    startCreate,
     handleCreateConfirm,
     handleRefresh,
     handleSelect,

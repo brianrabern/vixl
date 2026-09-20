@@ -3,9 +3,11 @@ import {
   ClipboardCopy,
   ClipboardPaste,
   Copy,
+  ExternalLink,
   File,
   FilePlus,
   FolderOpen,
+  FolderPlus,
   MessageSquarePlus,
   Pencil,
   Scissors,
@@ -19,7 +21,7 @@ import {
   ContextMenuSeparator,
 } from '@/components/shadcn/ui/context-menu'
 import WorkbenchFileEntryIcon from '@/components/workbench/FileEntryIcon.vue'
-import useFileTreeNodeMenu from '@/composables/use-file-tree-node-menu'
+import { parentPath } from '@/composables/file-tree-view/path-helpers'
 
 const props = defineProps<{
   name: string
@@ -36,6 +38,7 @@ const {
   openInEditor,
   handleRename,
   handleDelete,
+  startCreate,
   handleCut,
   handleCopy,
   handlePaste,
@@ -43,6 +46,10 @@ const {
   handleAddFileToNewChat,
   handleOpenInTerminal,
 } = useFileTreeNodeMenu()
+
+const createParentDir = computed(() =>
+  props.isDirectory ? props.path : parentPath(props.path),
+)
 
 const handleCopyRelativePath = async (): Promise<void> => {
   await copyRelativePath(props.path)
@@ -95,6 +102,14 @@ const handleAddFileToNewChatSelect = async (): Promise<void> => {
 const handleOpenInTerminalSelect = async (): Promise<void> => {
   await handleOpenInTerminal(props.path, props.isDirectory)
 }
+
+const handleNewFileSelect = (): void => {
+  startCreate('file', createParentDir.value)
+}
+
+const handleNewFolderSelect = (): void => {
+  startCreate('folder', createParentDir.value)
+}
 </script>
 
 <template>
@@ -103,6 +118,15 @@ const handleOpenInTerminalSelect = async (): Promise<void> => {
       <WorkbenchFileEntryIcon :name="name" :is-directory="isDirectory" />
       <span class="truncate">{{ name }}</span>
     </ContextMenuLabel>
+    <ContextMenuSeparator />
+    <ContextMenuItem @select="handleNewFileSelect">
+      <FilePlus />
+      New File
+    </ContextMenuItem>
+    <ContextMenuItem @select="handleNewFolderSelect">
+      <FolderPlus />
+      New Folder
+    </ContextMenuItem>
     <ContextMenuSeparator />
     <ContextMenuItem @select="handleRenameSelect">
       <Pencil />
@@ -165,7 +189,7 @@ const handleOpenInTerminalSelect = async (): Promise<void> => {
       v-if="!isDirectory"
       @select="handleOpenInEditor"
     >
-      <FilePlus />
+      <ExternalLink />
       Open in editor
     </ContextMenuItem>
     <ContextMenuSeparator />

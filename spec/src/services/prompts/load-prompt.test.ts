@@ -55,11 +55,11 @@ describe('load-prompt', () => {
       'Subagent model lock: anthropic::claude-sonnet-4. Do not pass `model` to spawn_subagent; the harness uses the locked model.',
     )
     expect(rendered).toContain(
-      'After spawning, leave a one-line visible status covering what you spawned, what is still running, and what happens next.',
+      'After spawning, leave a one-line visible status covering what was spawned, what is still running, and what happens next.',
     )
     expect(rendered).toContain('Do not poll with `terminal_output`.')
     expect(rendered).toContain(
-      'End your turn; the harness resumes as each background subagent finishes.',
+      'End the turn; the harness resumes as each background subagent finishes.',
     )
     expect(rendered).not.toContain('{{subagentModel}}')
   })

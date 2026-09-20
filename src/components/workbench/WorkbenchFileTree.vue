@@ -11,6 +11,12 @@ import {
 } from '@/components/shadcn/ui/alert-dialog'
 import { Button } from '@/components/shadcn/ui/button'
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/shadcn/ui/context-menu'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -73,6 +79,8 @@ const {
 
 defineExpose({
   refresh,
+  handleNewFile,
+  handleNewFolder,
 })
 </script>
 
@@ -137,27 +145,41 @@ defineExpose({
         </Tooltip>
       </div>
     </div>
-    <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-      <FileTree
-        v-if="tree?.children"
-        unstyled
-        class="border-0 bg-transparent p-0 font-sans text-[13px]"
-        :expanded="expandedPaths"
-        :selected-path="selectedPath"
-        :default-expanded="expandedPaths"
-        @update:selected-path="handleSelect"
-        @expanded-change="handleExpandedChange"
-      >
-        <WorkbenchFileTreeNode
-          v-for="child in tree.children"
-          :key="child.path"
-          :node="child"
-          :renaming-path="renamingPath"
-          @rename-confirm="handleRenameConfirm"
-          @rename-cancel="handleRenameCancel"
-        />
-      </FileTree>
-    </div>
+    <ContextMenu>
+      <ContextMenuTrigger as-child>
+        <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          <FileTree
+            v-if="tree?.children"
+            unstyled
+            class="border-0 bg-transparent p-0 font-sans text-[13px]"
+            :expanded="expandedPaths"
+            :selected-path="selectedPath"
+            :default-expanded="expandedPaths"
+            @update:selected-path="handleSelect"
+            @expanded-change="handleExpandedChange"
+          >
+            <WorkbenchFileTreeNode
+              v-for="child in tree.children"
+              :key="child.path"
+              :node="child"
+              :renaming-path="renamingPath"
+              @rename-confirm="handleRenameConfirm"
+              @rename-cancel="handleRenameCancel"
+            />
+          </FileTree>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem @select="handleNewFile('.')">
+          <FilePlus />
+          New File
+        </ContextMenuItem>
+        <ContextMenuItem @select="handleNewFolder('.')">
+          <FolderPlus />
+          New Folder
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
 
     <Dialog
       :open="createDialogOpen"

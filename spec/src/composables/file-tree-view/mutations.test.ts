@@ -7,10 +7,18 @@ import type { FileTreeMutationState } from '@/composables/file-tree-view/mutatio
 const fsDelete = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
 )
+const fsWriteFile = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+)
+const fsMkdir = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+)
 
 vi.mock('@/services/vixl/vixl-tauri', () =>
   mockVixlTauri({
     fsDelete: (...args: unknown[]) => fsDelete(...args),
+    fsWriteFile: (...args: unknown[]) => fsWriteFile(...args),
+    fsMkdir: (...args: unknown[]) => fsMkdir(...args),
   }),
 )
 
@@ -65,6 +73,10 @@ describe('createFileTreeMutations delete', () => {
     vi.resetModules()
     fsDelete.mockReset()
     fsDelete.mockResolvedValue(undefined)
+    fsWriteFile.mockReset()
+    fsWriteFile.mockResolvedValue(undefined)
+    fsMkdir.mockReset()
+    fsMkdir.mockResolvedValue(undefined)
     mcpStop.mockReset()
     mcpStop.mockResolvedValue(undefined)
     vi.mocked(toast.success).mockClear()
@@ -252,5 +264,132 @@ describe('createFileTreeMutations delete', () => {
     })
     expect(toast.success).not.toHaveBeenCalled()
     expect(state.deleting.value).toBe(false)
+  })
+})
+
+describe('createFileTreeMutations create parent override', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    fsWriteFile.mockReset()
+    fsWriteFile.mockResolvedValue(undefined)
+    fsMkdir.mockReset()
+    fsMkdir.mockResolvedValue(undefined)
+    vi.mocked(toast.success).mockClear()
+    vi.mocked(toast.error).mockClear()
+  })
+
+  it('creates a file under an explicit parent dir', async () => {
+    const { createFileTreeMutations } = await import(
+      '@/composables/file-tree-view/mutations'
+    )
+    const state = buildState()
+    state.selectedPath.value = 'src/App.vue'
+    const mutations = createFileTreeMutations(state)
+
+    mutations.handleNewFile('src/components')
+    state.createName.value = 'NewFile.vue'
+    await mutations.handleCreateConfirm()
+
+    expect(fsWriteFile).toHaveBeenCalledWith({
+      projectRoot: '/tmp/proj',
+      path: 'src/components/NewFile.vue',
+      content: '',
+      allowSensitive: true,
+    })
+    expect(fsMkdir).not.toHaveBeenCalled()
+  })
+
+  it('creates a file in the selectedPath parent when no explicit parent is passed', async () => {
+    const { createFileTreeMutations } = await import(
+      '@/composables/file-tree-view/mutations'
+    )
+    const state = buildState()
+    state.selectedPath.value = 'src/App.vue'
+    const mutations = createFileTreeMutations(state)
+
+    mutations.handleNewFile()
+    state.createName.value = 'NewFile.vue'
+    await mutations.handleCreateConfirm()
+
+    expect(fsWriteFile).toHaveBeenCalledWith({
+      projectRoot: '/tmp/proj',
+      path: 'src/NewFile.vue',
+      content: '',
+      allowSensitive: true,
+    })
+  })
+
+  it('clears the parent override after confirm so a later create uses selectedPath', async () => {
+    const { createFileTreeMutations } = await import(
+      '@/composables/file-tree-view/mutations'
+    )
+    const state = buildState()
+    state.selectedPath.value = 'src/App.vue'
+    const mutations = createFileTreeMutations(state)
+
+    mutations.handleNewFile('src/components')
+    state.createName.value = 'First.vue'
+    await mutations.handleCreateConfirm()
+
+    expect(fsWriteFile).toHaveBeenCalledWith({
+      projectRoot: '/tmp/proj',
+      path: 'src/components/First.vue',
+      content: '',
+      allowSensitive: true,
+    })
+
+    mutations.handleNewFile()
+    state.createName.value = 'Second.vue'
+    await mutations.handleCreateConfirm()
+
+    expect(fsWriteFile).toHaveBeenLastCalledWith({
+      projectRoot: '/tmp/proj',
+      path: 'src/Second.vue',
+      content: '',
+      allowSensitive: true,
+    })
+  })
+
+  it('clears the parent override when the create dialog is cancelled', async () => {
+    const { createFileTreeMutations } = await import(
+      '@/composables/file-tree-view/mutations'
+    )
+    const state = buildState()
+    state.selectedPath.value = 'src/App.vue'
+    const mutations = createFileTreeMutations(state)
+
+    mutations.handleNewFile('src/components')
+    mutations.handleCreateDialogOpenChange(false)
+
+    mutations.handleNewFile()
+    state.createName.value = 'AfterCancel.vue'
+    await mutations.handleCreateConfirm()
+
+    expect(fsWriteFile).toHaveBeenCalledTimes(1)
+    expect(fsWriteFile).toHaveBeenCalledWith({
+      projectRoot: '/tmp/proj',
+      path: 'src/AfterCancel.vue',
+      content: '',
+      allowSensitive: true,
+    })
+  })
+
+  it('creates a folder under an explicit parent dir', async () => {
+    const { createFileTreeMutations } = await import(
+      '@/composables/file-tree-view/mutations'
+    )
+    const state = buildState()
+    state.selectedPath.value = 'src/App.vue'
+    const mutations = createFileTreeMutations(state)
+
+    mutations.handleNewFolder('src/components')
+    state.createName.value = 'hooks'
+    await mutations.handleCreateConfirm()
+
+    expect(fsMkdir).toHaveBeenCalledWith({
+      projectRoot: '/tmp/proj',
+      path: 'src/components/hooks',
+    })
+    expect(fsWriteFile).not.toHaveBeenCalled()
   })
 })

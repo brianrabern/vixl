@@ -38,6 +38,7 @@ pub struct LspCatalogEntry {
     pub installed: bool,
     pub running: bool,
     pub disabled: bool,
+    pub can_disable: bool,
     pub error: Option<String>,
     pub source: Option<String>,
     pub install_state: Option<String>,
@@ -51,9 +52,20 @@ pub(crate) struct LspDiagnosticsEvent {
     pub(crate) server_id: String,
 }
 
+/// Extra running process ids that share an install and must be stopped first.
+/// `typescript-classic` is install-only; Vue hybrid mode runs as `typescript` and
+/// `vue` forwards tsserver requests into that process.
+pub fn dependent_server_ids(server_id: &str) -> &'static [&'static str] {
+    match server_id {
+        "typescript-classic" => &["typescript", "vue"],
+        _ => &[],
+    }
+}
+
 pub fn server_display_label(id: &str) -> String {
     match id {
         "typescript" => "TypeScript / JavaScript".to_string(),
+        "typescript-classic" => "TypeScript (Vue / Nuxt Hybrid)".to_string(),
         "vue" => "Vue / Nuxt".to_string(),
         "json" => "JSON".to_string(),
         "yaml" => "YAML".to_string(),

@@ -229,7 +229,7 @@ fn typescript_builtin_is_native_ts7_not_tls() {
 }
 
 #[test]
-fn typescript_classic_is_hidden_vue_hybrid_install() {
+fn typescript_classic_is_vue_hybrid_install() {
     let classic = builtin_spec_by_id("typescript-classic").unwrap();
     assert_eq!(classic.command, &["typescript-language-server", "--stdio"]);
     assert!(!classic.npm.as_ref().unwrap().native);
