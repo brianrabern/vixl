@@ -6,7 +6,7 @@ title: How Vixl works
 
 Vixl is a desktop LLMs UI that supports agents and coding. The UI is [Vue](https://vuejs.org/). The shell is [Tauri](https://tauri.app/). The backend is [Rust](https://www.rust-lang.org/). The agent runs on your machine. There is no Vixl home server, and the app does not ship analytics.
 
-The only network calls are the ones you configure: model providers, [MCP](https://modelcontextprotocol.io/) servers, and updates from [GitHub Releases](https://github.com/vixl-ai/vixl/releases).
+You configure network calls to model providers and [MCP](https://modelcontextprotocol.io/) servers. The app also downloads [language servers](/customize/language-servers) when `lsp.autoDownload` is on (the default), fetches the [CodeGraph](/concepts/code-graphs) CLI via `npx` on project activate, and checks [GitHub Releases](https://github.com/vixl-ai/vixl/releases) for updates.
 
 ## Where state lives
 

@@ -10,7 +10,7 @@ Default level is Allowlist (`agent.permissionLevel`). Changing the dial writes t
 
 ## The dial (Ask, Allowlist, Bypass)
 
-Ask prompts before each write, shell, git, or [MCP](https://modelcontextprotocol.io) action. Allowlist auto-approves paths matching `agent.autoApproveGlobs` and asks for the rest. Bypass skips prompts for file, shell, git, web, and MCP actions. Sensitive paths still ask.
+Ask prompts before each write, shell, git, web, or [MCP](https://modelcontextprotocol.io) action. Allowlist auto-approves paths matching `agent.autoApproveGlobs` and asks for the rest. Bypass skips prompts for file, shell, git, web, and MCP actions. Sensitive paths still ask.
 
 Switching to Bypass opens **Enable bypass mode?** Copy: "Bypass mode runs all tool actions without asking. Sensitive paths and denied capabilities still block or ask." Confirm: **Enable bypass**.
 
