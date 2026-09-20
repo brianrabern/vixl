@@ -22,7 +22,7 @@ npm:
 - JSON (`json`): [vscode-langservers-extracted](https://www.npmjs.com/package/vscode-langservers-extracted) `4.10.0`
 - YAML (`yaml`): [yaml-language-server](https://www.npmjs.com/package/yaml-language-server) `1.17.0`
 - Vue / Nuxt (`vue`): [@vue/language-server](https://www.npmjs.com/package/@vue/language-server) `3.3.9`, [@vue/typescript-plugin](https://www.npmjs.com/package/@vue/typescript-plugin) `3.3.9`, [typescript](https://www.npmjs.com/package/typescript) `5.8.2` ([Vue](https://vuejs.org))
-- Python (`python`): [basedpyright](https://www.npmjs.com/package/basedpyright) `1.28.5`
+- Python (`python`): [pyright](https://www.npmjs.com/package/pyright) `1.1.414`
 - Bash (`bash`): [bash-language-server](https://www.npmjs.com/package/bash-language-server) `5.4.3`
 - HTML (`html`): [vscode-langservers-extracted](https://www.npmjs.com/package/vscode-langservers-extracted) `4.10.0`
 - CSS (`css`): [vscode-langservers-extracted](https://www.npmjs.com/package/vscode-langservers-extracted) `4.10.0`

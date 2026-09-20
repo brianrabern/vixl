@@ -29,7 +29,7 @@ Install kinds: npm package, GitHub release (repo / tag / asset), HTTP archive, o
 | `json` | `vscode-langservers-extracted@4.10.0` | [vscode-langservers-extracted](https://www.npmjs.com/package/vscode-langservers-extracted) |
 | `yaml` | `yaml-language-server@1.17.0` | [yaml-language-server](https://www.npmjs.com/package/yaml-language-server) |
 | `vue` | `@vue/language-server@3.3.9`, `@vue/typescript-plugin@3.3.9`, `typescript@5.8.2` | [@vue/language-server](https://www.npmjs.com/package/@vue/language-server) |
-| `python` | `basedpyright@1.28.5` | [basedpyright](https://www.npmjs.com/package/basedpyright) |
+| `python` | `pyright@1.1.414` | [pyright](https://www.npmjs.com/package/pyright) |
 | `bash` | `bash-language-server@5.4.3` | [bash-language-server](https://www.npmjs.com/package/bash-language-server) |
 | `html` | `vscode-langservers-extracted@4.10.0` | [vscode-langservers-extracted](https://www.npmjs.com/package/vscode-langservers-extracted) |
 | `css` | `vscode-langservers-extracted@4.10.0` | [vscode-langservers-extracted](https://www.npmjs.com/package/vscode-langservers-extracted) |
