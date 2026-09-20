@@ -10,7 +10,7 @@ A short list of opinions I had when creating this project.
 
 Using other agent UIs I found they tend to "decorate" what the agent is doing, which feels, odd.
 
-When working with local LLMs it's helpful to know the current state of the process.
+When working with local LLMs especially it's helpful to know the current state of the process.
 
 Vixl labels the current state by always using terms such as "processing" never using marketing buzzwords.
 
@@ -18,15 +18,9 @@ While some would argue that "reasoning" and "thinking" also humanize the bot, I 
 
 Feel free to open an issue for this, if you can come up with something that feels better than "ITG" and reads cleanly in the chat flow.
 
-In system prompts there is no use of "you" or making the LLM "feel like a person."
-
-Every prompt is just technical descriptions of the flow, or tool.
-
 Not humanizing the bot, also makes it a great blankslate.
 
 Sometimes LLMs might be used for creative work, or other where its helpful to have it assume a personality when responding.
-
-So by not giving it one, you can add your own.
 
 ## Plans get saved
 
@@ -48,7 +42,7 @@ It should just feel like writing a shopping list.
 
 Once the [roadmap](/resources/roadmap) is met, I don't really want to keep adding unless theres a very worthwhile RFC.
 
-When you have people working 40hrs a week on a project it just becomes bloatware as new features must be added.
+When you have people working 40hrs a week on a project, overtime it just becomes bloatware.
 
 People just want software that works, and does a thing.
 
@@ -80,13 +74,21 @@ A LLM is a tool, not a person, and not a co-author.
 
 ## Fail loud
 
-An app that's silent is hard to debug, you'll see toasts around the app of little non-blockers or issues.
+I don't know what it is about LLM code, since it's just trained on codebases, maybe people really do this.
 
-Open an issue.
+However I've noticed an increase in voided calls, no-op catches, and comments saying "dont throw."
 
-The app is meant to be minimal so all user flows are regularly walked.
+Whatever happened to fail loudly?
 
-This way testing, and using are often one in the same.
+In production, sure we don't expose things to the user.
+
+However this is a hackable OSS project, I assume a non-zero number of people will need to debug parts of this app.
+
+So all catches, and errors must bubble up to something useable for humans.
+
+This means _you will see error_ toasts, and sometimes they might be noise, and other time it's a legit blocker.
+
+Open an issue, a PR, or some artifact.
 
 ## No cloud, ever
 

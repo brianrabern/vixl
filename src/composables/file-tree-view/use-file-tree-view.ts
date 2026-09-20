@@ -10,6 +10,7 @@ import {
   FileTreeProjectIdKey,
   FileTreeProjectRootKey,
   FileTreeRefreshKey,
+  FileTreeStartCreateKey,
   FileTreeStartDeleteKey,
   FileTreeStartRenameKey,
 } from '@/composables/use-file-tree-node-menu'
@@ -225,12 +226,15 @@ export default (
     handleCreateDialogOpenChange,
     handleNewFile,
     handleNewFolder,
+    startCreate,
     handleCreateConfirm,
     handleRefresh,
     handleSelect,
     handleExpandedChange,
     handlePointerDownOutsideRename,
   } = mutations
+
+  provide(FileTreeStartCreateKey, startCreate)
 
   onMounted(() => {
     document.addEventListener('pointerdown', handlePointerDownOutsideRename)
@@ -310,6 +314,7 @@ export default (
     refresh,
     startRename,
     startDelete,
+    startCreate,
     parentPath,
     joinPath,
     handleRenameConfirm,

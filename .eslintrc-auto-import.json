@@ -16,6 +16,7 @@
     "FileTreeProjectIdKey": true,
     "FileTreeProjectRootKey": true,
     "FileTreeRefreshKey": true,
+    "FileTreeStartCreateKey": true,
     "FileTreeStartDeleteKey": true,
     "FileTreeStartRenameKey": true,
     "FleetSidebarActivityItem": true,

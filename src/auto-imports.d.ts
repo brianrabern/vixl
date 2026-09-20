@@ -13,6 +13,7 @@ declare global {
   const FileTreeProjectIdKey: typeof import('./composables/use-file-tree-node-menu').FileTreeProjectIdKey
   const FileTreeProjectRootKey: typeof import('./composables/use-file-tree-node-menu').FileTreeProjectRootKey
   const FileTreeRefreshKey: typeof import('./composables/use-file-tree-node-menu').FileTreeRefreshKey
+  const FileTreeStartCreateKey: typeof import('./composables/use-file-tree-node-menu').FileTreeStartCreateKey
   const FileTreeStartDeleteKey: typeof import('./composables/use-file-tree-node-menu').FileTreeStartDeleteKey
   const FileTreeStartRenameKey: typeof import('./composables/use-file-tree-node-menu').FileTreeStartRenameKey
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
@@ -395,6 +396,7 @@ declare module 'vue' {
     readonly FileTreeProjectIdKey: UnwrapRef<typeof import('./composables/use-file-tree-node-menu')['FileTreeProjectIdKey']>
     readonly FileTreeProjectRootKey: UnwrapRef<typeof import('./composables/use-file-tree-node-menu')['FileTreeProjectRootKey']>
     readonly FileTreeRefreshKey: UnwrapRef<typeof import('./composables/use-file-tree-node-menu')['FileTreeRefreshKey']>
+    readonly FileTreeStartCreateKey: UnwrapRef<typeof import('./composables/use-file-tree-node-menu')['FileTreeStartCreateKey']>
     readonly FileTreeStartDeleteKey: UnwrapRef<typeof import('./composables/use-file-tree-node-menu')['FileTreeStartDeleteKey']>
     readonly FileTreeStartRenameKey: UnwrapRef<typeof import('./composables/use-file-tree-node-menu')['FileTreeStartRenameKey']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>

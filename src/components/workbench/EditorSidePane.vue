@@ -2,7 +2,9 @@
 import {
   Check,
   ClipboardCopy,
+  FilePlus,
   FileSearch,
+  FolderPlus,
   FolderSearch,
   GitCompareArrows,
   List,
@@ -60,6 +62,10 @@ const emit = defineEmits<{
   'update:formatOnSave': [value: boolean]
 }>()
 
+const fileTreeRef = ref<{
+  handleNewFile: (parentDirPath?: string) => void
+  handleNewFolder: (parentDirPath?: string) => void
+} | null>(null)
 const searchPanelRef = ref<{ focusFind: (expandReplace?: boolean) => void } | null>(null)
 
 const openSearch = (expandReplace = false): void => {
@@ -89,6 +95,14 @@ const handleListClick = (): void => {
     return
   }
   open.value = false
+}
+
+const handleNewFileClick = (): void => {
+  fileTreeRef.value?.handleNewFile()
+}
+
+const handleNewFolderClick = (): void => {
+  fileTreeRef.value?.handleNewFolder()
 }
 
 const handleSelect = (path: string): void => {
@@ -124,6 +138,14 @@ defineExpose({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="w-56">
                   <DropdownMenuLabel>File</DropdownMenuLabel>
+                  <DropdownMenuItem @click="handleNewFileClick">
+                    <FilePlus class="mr-2 h-4 w-4" />
+                    New File
+                  </DropdownMenuItem>
+                  <DropdownMenuItem @click="handleNewFolderClick">
+                    <FolderPlus class="mr-2 h-4 w-4" />
+                    New Folder
+                  </DropdownMenuItem>
                   <DropdownMenuItem @click="emit('save')">
                     <Save class="mr-2 h-4 w-4" />
                     Save
@@ -227,6 +249,7 @@ defineExpose({
     <div class="min-h-0 flex-1 overflow-hidden">
       <WorkbenchFileTree
         v-show="mode === 'explorer'"
+        ref="fileTreeRef"
         class="h-full"
         :project-id="projectId"
         :selected-path="selectedPath"

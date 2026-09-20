@@ -32,6 +32,10 @@ export const FileTreeStartDeleteKey: InjectionKey<
   (path: string, isDirectory: boolean) => void
 > = Symbol('FileTreeStartDelete')
 
+export const FileTreeStartCreateKey: InjectionKey<
+  (mode: 'file' | 'folder', parentDirPath: string) => void
+> = Symbol('FileTreeStartCreate')
+
 const toAbsolutePath = (projectRoot: string, relativePath: string): string => {
   if (relativePath === '.' || relativePath === '') {
     return projectRoot
@@ -73,6 +77,7 @@ export default () => {
   const refreshTree = inject(FileTreeRefreshKey)
   const startRename = inject(FileTreeStartRenameKey)
   const startDelete = inject(FileTreeStartDeleteKey)
+  const startCreateInjected = inject(FileTreeStartCreateKey)
 
   if (!projectRoot) {
     throw new Error('useFileTreeNodeMenu must be used within a file tree project root provider')
@@ -169,6 +174,16 @@ export default () => {
       return
     }
     startDelete(relativePath, isDirectory)
+  }
+
+  const startCreate = (mode: 'file' | 'folder', parentDirPath: string): void => {
+    if (!startCreateInjected) {
+      toast.error('Failed to create', {
+        description: 'File tree is not ready',
+      })
+      return
+    }
+    startCreateInjected(mode, parentDirPath)
   }
 
   const handleCut = (relativePath: string): void => {
@@ -295,6 +310,7 @@ export default () => {
     openInEditor,
     handleRename,
     handleDelete,
+    startCreate,
     handleCut,
     handleCopy,
     handlePaste,
