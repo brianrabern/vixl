@@ -10,7 +10,7 @@ Header **Install defaults** starts the Tier A set (TypeScript / JavaScript, JSON
 
 Per row: enable/disable (Play / Ban), Install when missing, Retry on error, Uninstall when `source` is `managed`. Status badges include Disabled, Requires workspace trust, Running, Managed install, Available on PATH, Not installed, Needs toolchain on PATH, and live install states. Events: `lsp://install`.
 
-Project-local servers that require trust ([ESLint](https://eslint.org), [Oxlint](https://oxc.rs), [Biome](https://biomejs.dev)) need `workspace.trust` for the active project. `typescript-classic` is not a catalog row. Vue / Nuxt hybrid installs [typescript-language-server](https://www.npmjs.com/package/typescript-language-server) `5.3.0` plus [typescript](https://www.npmjs.com/package/typescript) `5.8.2` under that hidden id.
+Project-local servers that require trust ([ESLint](https://eslint.org), [Oxlint](https://oxc.rs), [Biome](https://biomejs.dev)) need `workspace.trust` for the active project. Vue / Nuxt hybrid installs [typescript-language-server](https://www.npmjs.com/package/typescript-language-server) `5.3.0` plus [typescript](https://www.npmjs.com/package/typescript) `5.8.2` as `typescript-classic`, which appears in Settings > LSP as TypeScript (Vue / Nuxt Hybrid), an install-only row with no disable toggle.
 
 Every installable server below is what vixl actually fetches. Toolchain rows are listed after that: they are in the catalog but vixl does not download them. Duplicate listing with sources: [Managed components](/reference/managed-components).
 
@@ -56,7 +56,7 @@ HTTP archives:
 - Terraform (`terraform`): [terraform-ls 0.36.4](https://releases.hashicorp.com/terraform-ls/0.36.4/) from `https://releases.hashicorp.com/terraform-ls/{version}/terraform-ls_{version}_{target}.zip` ([hashicorp/terraform-ls](https://github.com/hashicorp/terraform-ls))
 - Java (`java`): Eclipse JDT LS snapshot from [download.eclipse.org](https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz) (`jdt-language-server-latest.tar.gz`)
 
-Hidden Vue hybrid install (not a catalog row): `typescript-classic` from [typescript-language-server](https://www.npmjs.com/package/typescript-language-server) `5.3.0` and [typescript](https://www.npmjs.com/package/typescript) `5.8.2`.
+TypeScript (Vue / Nuxt Hybrid) (`typescript-classic`): visible install-only row in Settings > LSP with no disable toggle. [typescript-language-server](https://www.npmjs.com/package/typescript-language-server) `5.3.0` and [typescript](https://www.npmjs.com/package/typescript) `5.8.2`.
 
 ## Toolchain on PATH (not downloaded)
 

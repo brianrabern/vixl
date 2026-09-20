@@ -12,7 +12,7 @@ mod workspace_diagnostics;
 pub use documents::forget_open_document;
 pub use ensure_running::start_lock_for;
 pub use helpers::{
-    apply_server_disabled_flag, is_lsp_method_not_found, normalize_lsp_method,
+    apply_server_disabled_flag, dependent_server_ids, is_lsp_method_not_found, normalize_lsp_method,
     normalize_lsp_params, server_display_label, LspCatalogEntry, LspServerStatus,
     LspWorkspaceProfile,
 };
@@ -431,15 +431,17 @@ pub async fn lsp_catalog(app: AppHandle) -> Result<Vec<LspCatalogEntry>, String>
     let mut seen = std::collections::HashSet::new();
 
     for spec in builtin_specs() {
-        if spec.id == "typescript-classic" {
-            continue;
-        }
         seen.insert(spec.id.to_string());
         let state = states.get(spec.id);
         let source = install_source_label(&app, spec.id);
         let installed = source != "none";
         let installable = is_managed_install_kind(spec.install);
-        let disabled = !effective.contains_key(spec.id);
+        let can_disable = spec.id != "typescript-classic";
+        let disabled = if spec.id == "typescript-classic" {
+            false
+        } else {
+            !effective.contains_key(spec.id)
+        };
         entries.push(LspCatalogEntry {
             id: spec.id.to_string(),
             label: server_display_label(spec.id),
@@ -454,6 +456,7 @@ pub async fn lsp_catalog(app: AppHandle) -> Result<Vec<LspCatalogEntry>, String>
             installed,
             running: state.map(|s| s.running).unwrap_or(false),
             disabled,
+            can_disable,
             error: state.and_then(|s| s.error.clone()),
             source: Some(source),
             install_state: state.and_then(|s| s.install_state.clone()).or_else(|| {
@@ -488,6 +491,7 @@ pub async fn lsp_catalog(app: AppHandle) -> Result<Vec<LspCatalogEntry>, String>
             installed: source != "none",
             running: state.map(|s| s.running).unwrap_or(false),
             disabled: false,
+            can_disable: true,
             error: state.and_then(|s| s.error.clone()),
             source: Some(source),
             install_state: state.and_then(|s| s.install_state.clone()),
@@ -501,6 +505,9 @@ pub async fn lsp_catalog(app: AppHandle) -> Result<Vec<LspCatalogEntry>, String>
 #[tauri::command]
 pub async fn lsp_uninstall_server(app: AppHandle, server_id: String) -> Result<(), String> {
     stop_server_internal(&server_id).await?;
+    for extra_id in dependent_server_ids(&server_id) {
+        stop_server_internal(extra_id).await?;
+    }
     remove_managed_install(&app, &server_id)?;
     set_state(
         &server_id,

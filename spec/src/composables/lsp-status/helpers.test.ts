@@ -20,6 +20,7 @@ const catalogEntry = (overrides: Partial<LspCatalogEntry> = {}): LspCatalogEntry
   installed: false,
   running: false,
   disabled: false,
+  canDisable: true,
   error: null,
   source: null,
   installState: null,

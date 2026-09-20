@@ -6,11 +6,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use app_lib::commands::lsp::{
     append_stderr_snippet, apply_diagnostic_registrations, apply_server_disabled_flag,
-    compute_vue_in_play, forget_open_document, is_lsp_method_not_found, lsp_invalid_stream_error,
-    lsp_request_timeout_error, merge_vue_plugin_options, normalize_lsp_method,
-    normalize_lsp_params, parse_diagnostic_provider, parse_workspace_diagnostic_report,
-    pick_typescript_tsdk, read_lsp_message, resolve_lsp_servers, server_display_label,
-    should_inject_vue_typescript_plugin, start_lock_for, tsserver_request_body,
+    compute_vue_in_play, dependent_server_ids, forget_open_document, is_lsp_method_not_found,
+    lsp_invalid_stream_error, lsp_request_timeout_error, merge_vue_plugin_options,
+    normalize_lsp_method, normalize_lsp_params, parse_diagnostic_provider,
+    parse_workspace_diagnostic_report, pick_typescript_tsdk, read_lsp_message, resolve_lsp_servers,
+    server_display_label, should_inject_vue_typescript_plugin, start_lock_for, tsserver_request_body,
     typescript_lsp_argv, typescript_version_supports_native_lsp, unwrap_tsserver_request_tuple,
 };
 use app_lib::commands::lsp_install::{
@@ -152,9 +152,24 @@ fn display_label_is_human_readable() {
         server_display_label("typescript"),
         "TypeScript / JavaScript"
     );
+    assert_eq!(
+        server_display_label("typescript-classic"),
+        "TypeScript (Vue / Nuxt Hybrid)"
+    );
     assert_eq!(server_display_label("gopls"), "Go");
     assert_eq!(server_display_label("sql"), "Postgres");
     assert_eq!(server_display_label("custom-lsp"), "Custom Lsp");
+}
+
+#[test]
+fn lsp_uninstall_stops_classic_typescript_dependents() {
+    assert_eq!(
+        dependent_server_ids("typescript-classic"),
+        &["typescript", "vue"]
+    );
+    assert!(dependent_server_ids("typescript").is_empty());
+    assert!(dependent_server_ids("vue").is_empty());
+    assert!(dependent_server_ids("rust-analyzer").is_empty());
 }
 
 #[test]

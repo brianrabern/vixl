@@ -86,7 +86,7 @@ pub(crate) static BUILTINS: &[BuiltinLspSpec] = &[
     ],
     true
   ),
-  // Install source for Vue LS 3 hybrid. Not a catalog/status row; spawned as id `typescript`.
+  // Install-only catalog row for Vue LS 3 hybrid. Still spawned as id `typescript`.
   npm_spec!(
     "typescript-classic",
     &["typescript-language-server", "--stdio"],

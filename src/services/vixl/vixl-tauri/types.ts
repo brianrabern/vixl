@@ -189,6 +189,7 @@ export type LspCatalogEntry = {
   installed: boolean
   running: boolean
   disabled: boolean
+  canDisable: boolean
   error?: string | null
   source?: string | null
   installState?: string | null
