@@ -26,7 +26,10 @@
     "audit:deps": "npm audit --audit-level=high",
     "audit:rust": "cargo audit --file src-tauri/Cargo.lock",
     "ci": "run-s lint type-check test:coverage audit:deps build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "docs:dev": "npm --prefix docs run dev",
+    "docs:build": "npm --prefix docs run build",
+    "docs:preview": "npm --prefix docs run preview"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.15",

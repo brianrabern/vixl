@@ -27,6 +27,7 @@ export default defineConfigWithVueTs(
     'src/components/ai-elements/**',
     'src/auto-imports.d.ts',
     'src/components.d.ts',
+    'docs/**',
   ]),
 
   ...pluginVue.configs['flat/essential'],

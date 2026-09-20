@@ -1,0 +1,22 @@
+---
+title: Comparison
+---
+
+# Comparison
+
+Vixl was built to make a local machine feel smoother. Pain that motivated it: [OpenCode](https://opencode.ai/) would not show reasoning for Qwen even though it appeared in traces. [VS Code](https://code.visualstudio.com/) agents required an account even for local models, with plans stored in chats. With a router you specify every model yourself; the first-party model lists do not apply. [Cursor](https://cursor.com/) and [Google Antigravity](https://antigravity.google/) are cloud-only.
+
+Sources for the table: [GitHub Copilot plans](https://docs.github.com/en/copilot/get-started/plans), [VS Code language models](https://code.visualstudio.com/docs/copilot/language-models), [VS Code BYOK](https://code.visualstudio.com/blogs/2026/06/18/byok-vscode), [VS Code license](https://code.visualstudio.com/license), [VS Code MCP](https://code.visualstudio.com/docs/agent-customization/mcp-servers), [Cursor pricing](https://cursor.com/pricing), [Cursor models](https://cursor.com/docs/models-and-pricing), [Cursor API keys](https://cursor.com/docs/settings/api-keys), [Cursor MCP](https://cursor.com/docs/mcp), [Cursor terms](https://cursor.com/terms-of-service), [Antigravity pricing](https://antigravity.google/pricing), [Antigravity models](https://antigravity.google/docs/models/), [Antigravity plans](https://www.antigravity.google/docs/plans/), [Antigravity MCP](https://antigravity.google/docs/mcp/).
+
+| | Vixl | VS Code + GitHub Copilot | Cursor | Google Antigravity |
+| --- | --- | --- | --- | --- |
+| Editor cost | Free (MIT app) | Editor is free to download. The vscode source is MIT. The shipped VS Code binary uses a Microsoft product license. | Hobby is free. Pro $20/month, Pro+ $60/month, Ultra $200/month. Teams $40 and $120 per user/month. | Individual free tier with weekly rate limits. Higher quotas via Google AI Pro $19.99/month and Google AI Ultra. |
+| AI cost | You pay the host you configured (BYOK). No Vixl subscription. | Copilot Free $0 (limited credits, 2,000 completions/month), Pro $10/month, Pro+ $39/month, Max $100/month, Business $19/seat, Enterprise $39/seat. Extra usage billed as AI credits at $0.01 each. Copilot is a commercial subscription. | On-demand overage at API rates. Teams/Enterprise add a Cursor Token Rate of $0.25 per million tokens on third-party models, including BYOK. | Rate limits on the free tier. Paid Google AI plans raise quotas. Official docs: no BYOK or bring-your-own-endpoint for extra rate limits. |
+| License | MIT | vscode source MIT; shipped binary Microsoft product license; Copilot commercial. | Proprietary. | Proprietary. |
+| Model choice / BYOK | BYOK for the first-party provider catalog, custom OpenAI-compatible endpoints, and Ollama. Keys stay in the OS keychain. | Paid Copilot plans: picker over GitHub-hosted models (OpenAI, Anthropic, Google, xAI, others). Free plan is auto-model only. BYOK in VS Code Chat (Azure, Anthropic, Gemini, OpenAI, OpenRouter, Hugging Face, custom endpoints) does not apply to code completions. BYOK keys use VS Code SecretStorage (OS keychain backed). | Cursor-hosted Grok and Composer models plus third-party Anthropic, Google, OpenAI, and others listed in Cursor's model docs. BYOK: OpenAI, Anthropic, Google, Azure OpenAI, AWS Bedrock. Chat only. Tab completion always uses Cursor models. Keys are sent to Cursor's backend with every request for prompt building. Zero Data Retention does not apply to BYOK. | Gemini 3.8/3.7/3.6 Flash, Gemini 3.1 Pro, plus Claude Sonnet/Opus 4.6 (thinking) and GPT-OSS-120b on consumer plans. No first-party BYOK for extra limits (see AI cost). |
+| Local and offline | Offline with local models (Ollama and other local OpenAI-compatible hosts). No account required. | Local models (Ollama, Foundry Local, custom endpoints) work for chat, but take extra configuration and still require a GitHub account. Completions still need Copilot. | Not a first-party local provider (no official Ollama support). AI features require Cursor's backend. | No first-party local inference for the reasoning model. No documented offline mode. |
+| MCP | stdio, http, and sse. | Yes: stdio and HTTP, workspace or user `mcp.json`. | Yes: stdio, SSE, Streamable HTTP. | Yes: stdio, Streamable HTTP, SSE. |
+
+OpenCode is not in the table. The README comparison is Vixl vs VS Code agents, Cursor, and Antigravity. The Qwen reasoning gap is why Vixl shows reasoning in the thread when the provider streams it.
+
+See [Philosophy](/getting-started/philosophy) and [FAQ](/resources/faq).

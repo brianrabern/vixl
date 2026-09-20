@@ -40,3 +40,9 @@ __screenshots__/
 
 # CodeGraph local index (codegraph.db and runtime files; not for committing)
 .codegraph/
+
+# VitePress docs
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+docs/.vitepress/.temp/

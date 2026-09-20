@@ -1,7 +1,7 @@
 type VisibleStatusVerb = 'spawned' | 'steered' | 'finished'
 
 const visibleStatusSubject = (verb: VisibleStatusVerb): string =>
-  verb === 'finished' ? 'what finished' : `what you ${verb}`
+  verb === 'finished' ? 'what finished' : `what was ${verb}`
 
 const visibleStatus = (verb: VisibleStatusVerb): string =>
   `Leave a one-line visible status covering ${visibleStatusSubject(verb)}, what is still running, and what happens next.`
