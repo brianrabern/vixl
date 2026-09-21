@@ -1,5 +1,6 @@
 ---
 title: Your first chat
+description: Send a first Vixl chat from the home screen after you pick a project, a mode, and a BYOK model.
 ---
 
 # Your first chat

@@ -1,5 +1,6 @@
 ---
 title: Permissions and approvals
+description: The Vixl permission dial is Ask, Allowlist, or Bypass, and it decides which tools may run without asking you.
 ---
 
 # Permissions and approvals

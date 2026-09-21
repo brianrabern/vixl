@@ -1,5 +1,6 @@
 ---
 title: Permission settings
+description: Configure the Vixl permission dial, sandbox, and allow/deny list from the chat input and Settings > Permissions.
 ---
 
 # Permission settings

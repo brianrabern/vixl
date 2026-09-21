@@ -1,5 +1,6 @@
 ---
 title: Troubleshooting
+description: Fix Vixl issues from visible toasts covering keychain access, providers, MCP, updates, and sandbox denials.
 ---
 
 # Troubleshooting

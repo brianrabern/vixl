@@ -1,5 +1,6 @@
 ---
 title: Manage chats
+description: Manage Vixl chats in the sidebar by renaming, pinning, forking, deleting, copying the id, or exporting a transcript.
 ---
 
 # Manage chats

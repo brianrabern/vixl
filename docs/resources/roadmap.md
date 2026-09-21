@@ -1,5 +1,6 @@
 ---
 title: Roadmap
+description: The remaining Vixl roadmap is image edit, deep themes, and SSH; after that the app gets only fixes and optimizations.
 ---
 
 # Roadmap

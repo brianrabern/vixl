@@ -1,5 +1,6 @@
 ---
 title: Chat statuses
+description: A Vixl chat stores status and attention; running wins, then labels like Needs approval, Needs input, Done, and Error.
 ---
 
 # Chat statuses

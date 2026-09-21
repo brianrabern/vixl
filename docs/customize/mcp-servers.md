@@ -1,5 +1,6 @@
 ---
 title: MCP servers
+description: Add MCP servers in Vixl over stdio, HTTP, or SSE; config lives in mcp.json and secrets stay in the OS keychain.
 ---
 
 # MCP servers

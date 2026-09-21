@@ -1,5 +1,6 @@
 ---
 title: Use the workbench
+description: The Vixl workbench is the right sidebar with a Monaco editor, file tree, language servers, terminals, and git Changes.
 ---
 
 # Use the workbench

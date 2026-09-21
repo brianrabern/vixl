@@ -1,5 +1,6 @@
 ---
 title: Appearance
+description: Set Vixl theme, transparency, keyboard shortcuts, and GitHub Releases updates from Settings > General.
 ---
 
 # Appearance

@@ -1,5 +1,6 @@
 ---
 title: Adding a project
+description: Add a project in the Vixl sidebar with a native folder picker, then open chats, MCP, graphs, plans, skills, and agents.
 ---
 
 # Adding a project

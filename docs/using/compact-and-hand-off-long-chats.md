@@ -1,5 +1,6 @@
 ---
 title: Compact and hand off long chats
+description: Compact a long Vixl chat into a checkpoint, or Handoff to a new thread with the summary after compacting first.
 ---
 
 # Compact and hand off long chats

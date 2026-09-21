@@ -1,5 +1,6 @@
 ---
 title: settings.json
+description: settings.json holds Vixl theme, models, permissions, and more; API keys are never stored here.
 ---
 
 # settings.json

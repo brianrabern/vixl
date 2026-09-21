@@ -1,5 +1,6 @@
 ---
 title: Orchestrate sub-agents
+description: Orchestrator mode locks the Vixl parent to guiding sub-agents; it does not write files, run shell, or mutate git itself.
 ---
 
 # Orchestrate sub-agents

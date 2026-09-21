@@ -1,5 +1,6 @@
 ---
 title: Models
+description: Model picks in Vixl are personal BYOK role defaults in settings.json; send stays blocked until a provider exists.
 ---
 
 # Models

@@ -1,5 +1,6 @@
 ---
 title: Export a transcript
+description: Export a Vixl chat as a plain-text transcript with a native save dialog; Copy ID copies the chat id, not the dump.
 ---
 
 # Export a transcript

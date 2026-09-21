@@ -1,5 +1,6 @@
 ---
 title: How Vixl works
+description: Vixl is a local-first desktop LLM UI built with Vue, Tauri, and Rust, with no home server and no analytics.
 ---
 
 # How Vixl works

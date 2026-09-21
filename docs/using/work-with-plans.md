@@ -1,5 +1,6 @@
 ---
 title: Work with plans
+description: Vixl plans are durable PLAN.md files; Plan mode researches and writes the plan, then Build or Orchestrate implements it.
 ---
 
 # Work with plans

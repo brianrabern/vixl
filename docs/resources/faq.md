@@ -1,5 +1,6 @@
 ---
 title: FAQ
+description: Answers to common Vixl questions about the local-first BYOK desktop app, keys in the OS keychain, and the MIT license.
 ---
 
 # FAQ

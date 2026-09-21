@@ -1,5 +1,6 @@
 ---
 title: Privacy
+description: Vixl is local-first with no analytics and no home server; you configure providers and MCP, and keys stay in the OS keychain.
 ---
 
 # Privacy

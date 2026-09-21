@@ -1,5 +1,6 @@
 ---
 title: Custom agent frontmatter
+description: Custom Vixl agents are markdown under .vixl/agents/; YAML frontmatter is optional and the body is the sub-agent prompt.
 ---
 
 # Custom agent frontmatter

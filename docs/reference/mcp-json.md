@@ -1,5 +1,6 @@
 ---
 title: mcp.json
+description: mcp.json holds Vixl MCP server configs for personal and project scope; secrets stay in the OS keychain, not this file.
 ---
 
 # mcp.json

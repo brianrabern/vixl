@@ -1,5 +1,6 @@
 ---
 title: Shortcuts and the command palette
+description: Vixl shortcuts include Cmd/Ctrl+K for the command palette, Cmd/Ctrl+N for New Agent, and Cmd/Ctrl+B for the sidebar.
 ---
 
 # Shortcuts and the command palette

@@ -1,5 +1,6 @@
 ---
 title: Custom agents
+description: A Vixl custom agent is markdown under .vixl/agents/; frontmatter constrains a spawn and the body is the sub-agent prompt.
 ---
 
 # Custom agents

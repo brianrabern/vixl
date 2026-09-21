@@ -1,5 +1,6 @@
 ---
 title: Keyboard shortcuts
+description: Vixl app shortcuts include the command palette, New Agent, sidebars, send, and Escape to leave Settings.
 ---
 
 # Keyboard shortcuts

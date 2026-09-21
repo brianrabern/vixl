@@ -1,5 +1,6 @@
 ---
 title: Overview
+description: Install Vixl, add a BYOK provider, optionally open a project, then send your first chat from the desktop app.
 ---
 
 # A note from a human

@@ -1,5 +1,6 @@
 ---
 title: Review and restore changes
+description: Review Vixl git diffs in the workbench Changes tab, or restore files from a per-turn checkpoint on an agent message.
 ---
 
 # Review and restore changes

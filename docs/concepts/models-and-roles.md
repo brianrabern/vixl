@@ -1,5 +1,6 @@
 ---
 title: Models and roles
+description: Vixl does not host models; you bring a BYOK provider and pick personal models per role such as Ask, Agent, and Subagent.
 ---
 
 # Models and roles

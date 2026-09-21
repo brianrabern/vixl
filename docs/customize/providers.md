@@ -1,5 +1,6 @@
 ---
 title: Providers
+description: Providers are personal BYOK endpoints in Vixl Settings; API keys go in the OS keychain, never in settings.json.
 ---
 
 # Providers

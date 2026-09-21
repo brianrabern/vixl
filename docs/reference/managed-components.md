@@ -1,5 +1,6 @@
 ---
 title: Managed components
+description: Vixl installs CodeGraph via npx and a catalog of language servers; PATH-only toolchains are not downloaded.
 ---
 
 # Managed components

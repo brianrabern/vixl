@@ -1,5 +1,6 @@
 ---
 title: Language servers
+description: Language servers drive hover and completion in the Vixl workbench; Settings > LSP is personal and requires the desktop app.
 ---
 
 # Language servers

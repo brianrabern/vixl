@@ -1,5 +1,6 @@
 ---
 title: Projects and home chats
+description: A Vixl project is a folder you register; home chats run with no project using your user home as the workspace.
 ---
 
 # Projects and home chats

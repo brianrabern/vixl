@@ -1,5 +1,6 @@
 ---
 title: Chat modes
+description: Vixl chat modes are Agent, Ask, Orchestrator, and Plan, each with a built-in skill and a tool allowlist.
 ---
 
 # Chat modes

@@ -1,5 +1,6 @@
 ---
 title: Comparison
+description: Compare Vixl to VS Code Copilot, Cursor, and Antigravity on BYOK, local models, MCP, cost, and license.
 ---
 
 # Comparison

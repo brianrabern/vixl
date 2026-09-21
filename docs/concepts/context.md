@@ -1,5 +1,6 @@
 ---
 title: Context
+description: Each Vixl turn builds a small system prompt from catalogs and names, then loads full MCP schemas and skill bodies on demand.
 ---
 
 # Context

@@ -1,5 +1,6 @@
 ---
 title: The .vixl directory
+description: Vixl keeps personal and project .vixl trees for config, while API keys and MCP secrets stay in the OS keychain.
 ---
 
 # The .vixl directory

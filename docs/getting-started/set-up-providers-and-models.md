@@ -1,5 +1,6 @@
 ---
 title: Set up providers and models
+description: Add a BYOK provider in Vixl Settings, test the connection, then assign default models for each chat role.
 ---
 
 # Set up providers and models

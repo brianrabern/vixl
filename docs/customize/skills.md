@@ -1,5 +1,6 @@
 ---
 title: Skills
+description: A Vixl skill is a SKILL.md file; agents see a catalog, load full text with load_skill, and you can attach one with /.
 ---
 
 # Skills

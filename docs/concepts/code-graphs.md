@@ -1,5 +1,6 @@
 ---
 title: Code graphs
+description: Vixl indexes each project with CodeGraph via npx, stores graphs under personal .vixl, and exposes them as MCP tools.
 ---
 
 # Code graphs

@@ -1,5 +1,6 @@
 ---
 title: Installation
+description: Install the Vixl desktop app from GitHub Releases for macOS arm64, Linux x64, and Windows, or build from source.
 ---
 
 # Installation

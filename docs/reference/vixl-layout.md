@@ -1,5 +1,6 @@
 ---
 title: ".vixl layout"
+description: Personal Vixl config lives under app data in .vixl and project config lives in the repo .vixl; keys stay in the OS keychain.
 ---
 
 # .vixl layout

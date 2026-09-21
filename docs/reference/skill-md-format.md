@@ -1,5 +1,6 @@
 ---
 title: SKILL.md format
+description: A Vixl skill is a folder with SKILL.md YAML name and description plus a markdown body the agent can load.
 ---
 
 # SKILL.md format

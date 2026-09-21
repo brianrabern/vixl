@@ -1,5 +1,6 @@
 ---
 title: Rules and AGENTS.md
+description: Rules and AGENTS.md are always-on prompt text in Vixl; they are not a security override and have no per-rule glob gating.
 ---
 
 # Rules and AGENTS.md

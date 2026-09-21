@@ -1,7 +1,127 @@
-import { defineConfig } from 'vitepress'
+import { defineConfig, type HeadConfig } from 'vitepress'
 import llmstxt from 'vitepress-plugin-llms'
 
 const githubRepo = 'https://github.com/vixl-ai/vixl'
+const siteOrigin = 'https://vixl.app'
+const ogImage = `${siteOrigin}/hero.png`
+
+type FaqItem = {
+  question: string
+  answer: string
+}
+
+// Mirrors questions and answers in docs/resources/faq.md.
+const faqItems: FaqItem[] = [
+  {
+    question: 'What does Vixl stand for?',
+    answer:
+      'Vixl stands for "Vue Pixel", a love of building websites (pixels on a screen) with Vue.',
+  },
+  {
+    question: 'Is Vixl going to keep adding features forever?',
+    answer:
+      'No. Once the roadmap is met, Vixl gets only optimizations and bug fixes. Paid harnesses bloat because employees working 40-hour weeks need something to do.',
+  },
+  {
+    question: 'Is there a cloud service?',
+    answer:
+      'No, never. There is no Vixl account and no Vixl home server. You bring your own keys and hosts.',
+  },
+  {
+    question: 'Where are my keys?',
+    answer:
+      'In the OS keychain. Provider secrets use vixl:provider:<apiKeyRef>. MCP input secrets use vixl:mcp:<serverId>:input:<inputId>. They are never written to .vixl or settings.json. On Linux without Secret Service, they fall back to secrets-vault.json in the app config dir.',
+  },
+  {
+    question: 'Do I need an account to use a local model?',
+    answer:
+      'No. Ollama and other local OpenAI-compatible hosts work without a Vixl account and without an API key. Add a provider when you want one.',
+  },
+  {
+    question: 'Where is my data?',
+    answer:
+      'Personal config is {appData}/.vixl (on macOS, ~/Library/Application Support/app.vixl/.vixl). Project config is <repo>/.vixl. Chat rows live in vixl.sqlite. Chat files live under .vixl/chats/.',
+  },
+  {
+    question: 'What happens when I delete a chat?',
+    answer:
+      'The SQLite row and the chat directory are removed. There is no archive and no Vixl-side memory of that thread. If you used a cloud provider, that provider\'s retention is the provider\'s business.',
+  },
+  {
+    question: 'Does Vixl send analytics?',
+    answer:
+      'No. The only telemetry string in the app is CODEGRAPH_TELEMETRY=0, which turns off the CodeGraph package\'s own telemetry. Network calls are the ones you configure: providers, MCP servers, and updates from GitHub Releases.',
+  },
+  {
+    question: 'What license is Vixl?',
+    answer:
+      'MIT. The desktop app is free. You pay the model host you configured. There is no Vixl subscription.',
+  },
+  {
+    question: 'How do I install it?',
+    answer:
+      'Download a build from GitHub Releases (macOS arm64, Linux x64, Windows), or build from source.',
+  },
+]
+
+function canonicalUrl(relativePath: string): string {
+  const cleaned = relativePath
+    .replace(/\\/g, '/')
+    .replace(/(^|\/)index\.md$/, '$1')
+    .replace(/\.md$/, '')
+  return `${siteOrigin}/${cleaned}`
+}
+
+function jsonLdScript(data: Record<string, unknown>): HeadConfig {
+  return [
+    'script',
+    { type: 'application/ld+json' },
+    JSON.stringify(data).replace(/</g, '\\u003c'),
+  ]
+}
+
+function homeJsonLd(siteDescription: string): HeadConfig {
+  return jsonLdScript({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'SoftwareApplication',
+        name: 'Vixl',
+        description: siteDescription,
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'macOS, Windows, Linux',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD',
+        },
+        url: siteOrigin,
+        sameAs: githubRepo,
+        license: `${githubRepo}/blob/main/LICENSE`,
+      },
+      {
+        '@type': 'WebSite',
+        name: 'Vixl',
+        url: siteOrigin,
+      },
+    ],
+  })
+}
+
+function faqJsonLd(): HeadConfig {
+  return jsonLdScript({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqItems.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  })
+}
 
 export default defineConfig({
   title: 'Vixl',
@@ -16,10 +136,47 @@ export default defineConfig({
     ['link', { rel: 'icon', type: 'image/png', href: '/favicon.png' }],
     ['link', { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }],
   ],
+  transformHead({ pageData, title, description, siteData }) {
+    const canonical = canonicalUrl(pageData.relativePath)
+    const isHome = pageData.relativePath === 'index.md'
+    const ogType = isHome ? 'website' : 'article'
+    const head: HeadConfig[] = [
+      ['link', { rel: 'canonical', href: canonical }],
+      [
+        'link',
+        {
+          rel: 'alternate',
+          type: 'text/plain',
+          href: `${siteOrigin}/llms.txt`,
+          title: 'llms.txt',
+        },
+      ],
+      ['link', { rel: 'help', href: `${siteOrigin}/getting-started/` }],
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: canonical }],
+      ['meta', { property: 'og:type', content: ogType }],
+      ['meta', { property: 'og:image', content: ogImage }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+      ['meta', { name: 'twitter:title', content: title }],
+      ['meta', { name: 'twitter:description', content: description }],
+      ['meta', { name: 'twitter:image', content: ogImage }],
+    ]
+    if (isHome) {
+      head.push(homeJsonLd(siteData.description))
+    }
+    if (pageData.relativePath === 'resources/faq.md') {
+      head.push(faqJsonLd())
+    }
+    return head
+  },
   vite: {
     plugins: [
       llmstxt({
         domain: 'https://vixl.app',
+        generateLLMFriendlyDocsForEachPage: true,
+        generateLLMsFullTxt: true,
+        excludeIndexPage: false,
       }),
     ],
   },
@@ -151,6 +308,7 @@ export default defineConfig({
           { text: 'Privacy', link: '/resources/privacy' },
           { text: 'Comparison', link: '/resources/comparison' },
           { text: 'Roadmap', link: '/resources/roadmap' },
+          { text: 'Brand and press', link: '/resources/brand' },
           { text: 'Changelog', link: `${githubRepo}/releases` },
         ],
       },

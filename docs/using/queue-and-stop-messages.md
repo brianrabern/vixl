@@ -1,5 +1,6 @@
 ---
 title: Queue and stop messages
+description: When the Vixl parent is busy, a send is queued; Stop generating aborts the run and does not drain the queue.
 ---
 
 # Queue and stop messages

@@ -1,5 +1,6 @@
 ---
 title: Philosophy
+description: Vixl is a local-first, BYOK desktop LLM harness with a short list of opinions and a finite roadmap.
 ---
 
 # Philosophy
