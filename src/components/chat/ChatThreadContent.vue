@@ -5,6 +5,7 @@ import type { ChatStatus } from 'ai'
 import type { ChatTimelineItem, SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { PendingQuestionState } from '@/types/chat/pending-question'
 import type { PendingMcpAuthView } from '@/types/chat/pending-mcp-auth'
+import type { AggregatedTurnFileChange } from '@/types/harness/file-checkpoint'
 import type { McpConfig } from '@/types/vixl/mcp-config'
 import type { PendingApprovalView } from '@/services/harness/permission/gate'
 import AiElementsShimmerShimmer from '@/components/ai-elements/shimmer/Shimmer.vue'
@@ -22,6 +23,10 @@ import {
   useMessageScroller,
 } from '@/components/shadcn/ui/message-scroller'
 import { useMessageScrollerContext } from '@/components/shadcn/ui/message-scroller/useMessageScroller'
+import {
+  aggregateChatFileDiffs,
+  collectMutationsAfterUserMessage,
+} from '@/services/harness/restore-file-checkpoints'
 import deriveAgentActivity from '@/utils/derive-agent-activity'
 
 const props = defineProps<{
@@ -242,6 +247,46 @@ const lastVisibleAgentTurnIndex = computed(() => {
   return lastIndex
 })
 
+const chatFileChanges = computed(() => aggregateChatFileDiffs(props.timeline))
+
+const lastAgentTurnIndex = computed(() => {
+  for (let index = props.timeline.length - 1; index >= 0; index -= 1) {
+    if (props.timeline[index]?.type === 'agent-turn') {
+      return index
+    }
+  }
+  return -1
+})
+
+const lastTurnRestoreChanges = computed((): AggregatedTurnFileChange[] | undefined => {
+  const lastTurnIndex = lastAgentTurnIndex.value
+  if (lastTurnIndex < 0) {
+    return undefined
+  }
+  for (let index = lastTurnIndex - 1; index >= 0; index -= 1) {
+    const item = props.timeline[index]
+    if (item?.type === 'user') {
+      return collectMutationsAfterUserMessage(props.timeline, item.message.id)
+    }
+  }
+  return undefined
+})
+
+const lastTurnCanRestore = computed(() => (lastTurnRestoreChanges.value?.length ?? 0) > 0)
+
+const hasUserMessageAfterLastTurn = computed(() => {
+  const lastTurnIndex = lastAgentTurnIndex.value
+  if (lastTurnIndex < 0) {
+    return false
+  }
+  for (let index = lastTurnIndex + 1; index < props.timeline.length; index += 1) {
+    if (props.timeline[index]?.type === 'user') {
+      return true
+    }
+  }
+  return false
+})
+
 const activityOnLastAgentTurn = computed(() => {
   const lastIndex = visibleTimeline.value.length - 1
   return (
@@ -341,7 +386,10 @@ watch(
             :activity-label="agentTurnActivityLabel(index)"
             :subagents-by-tool-call-id="subagentsByToolCallId"
             :subagents-by-id="subagentsById"
-            :restore-enabled="!readOnly && !isLive"
+            :restore-enabled="!readOnly && !isLive && (index !== lastVisibleAgentTurnIndex || lastTurnCanRestore)"
+            :chat-file-changes="index === lastVisibleAgentTurnIndex ? chatFileChanges : null"
+            :restore-changes="index === lastVisibleAgentTurnIndex ? lastTurnRestoreChanges : undefined"
+            :restore-discards-latest-message="index === lastVisibleAgentTurnIndex ? hasUserMessageAfterLastTurn : undefined"
             @retry="emit('retry')"
             @restore-files="emit('restoreFiles', item.turn.id)"
             @stop-subagent="emit('stopSubagent', $event)"

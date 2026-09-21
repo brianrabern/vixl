@@ -24,6 +24,22 @@ export const aggregateSubagentFileDiffs = (
 ): AggregatedTurnFileChange[] =>
   aggregateToolRunFileDiffs(subagent.tools, existing)
 
+export const aggregateChatFileDiffs = (
+  timeline: ChatTimelineItem[],
+): AggregatedTurnFileChange[] => {
+  let changes: AggregatedTurnFileChange[] = []
+  for (const item of timeline) {
+    if (item.type === 'agent-turn') {
+      changes = aggregateToolRunFileDiffs(toolsFromTurn(item.turn), changes)
+      continue
+    }
+    if (item.type === 'subagent') {
+      changes = aggregateSubagentFileDiffs(item, changes)
+    }
+  }
+  return changes
+}
+
 const aggregatedChangesForItem = (
   item: ChatTimelineItem,
 ): AggregatedTurnFileChange[] => {
@@ -47,18 +63,7 @@ export const collectMutationsAfterUserMessage = (
     return []
   }
 
-  let changes: AggregatedTurnFileChange[] = []
-  for (const item of timeline.slice(index + 1)) {
-    if (item.type === 'agent-turn') {
-      changes = aggregateToolRunFileDiffs(toolsFromTurn(item.turn), changes)
-      continue
-    }
-    if (item.type === 'subagent') {
-      changes = aggregateSubagentFileDiffs(item, changes)
-    }
-  }
-
-  return changes
+  return aggregateChatFileDiffs(timeline.slice(index + 1))
 }
 
 /**

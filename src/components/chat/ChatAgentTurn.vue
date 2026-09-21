@@ -4,6 +4,7 @@ import type { ChatStatus } from 'ai'
 import { RotateCcwIcon } from '@lucide/vue'
 import type { AgentTurn } from '@/types/chat/agent-turn'
 import type { SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
+import type { AggregatedTurnFileChange } from '@/types/harness/file-checkpoint'
 import type { ToolRun } from '@/types/harness/tool-run'
 import AiElementsChainOfThoughtChainOfThought from '@/components/ai-elements/chain-of-thought/ChainOfThought.vue'
 import AiElementsChainOfThoughtChainOfThoughtContent from '@/components/ai-elements/chain-of-thought/ChainOfThoughtContent.vue'
@@ -27,10 +28,6 @@ import {
 import formatToolGroupHeader from '@/utils/format-tool-group-header'
 import resolveSpawnSubagent from '@/utils/resolve-spawn-subagent'
 import segmentStepTools from '@/utils/segment-step-tools'
-import {
-  aggregateSubagentFileDiffs,
-  aggregateTurnFileDiffs,
-} from '@/services/harness/restore-file-checkpoints'
 
 const props = defineProps<{
   turn: AgentTurn
@@ -39,6 +36,9 @@ const props = defineProps<{
   subagentsByToolCallId?: Map<string, SubagentTimelineItem>
   subagentsById?: Map<string, SubagentTimelineItem>
   restoreEnabled?: boolean
+  chatFileChanges?: AggregatedTurnFileChange[] | null
+  restoreChanges?: AggregatedTurnFileChange[]
+  restoreDiscardsLatestMessage?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -55,25 +55,8 @@ const showActivity = computed(
   () => typeof props.activityLabel === 'string' && props.activityLabel.length > 0,
 )
 
-const fileChanges = computed(() => {
-  let changes = aggregateTurnFileDiffs(props.turn)
-  for (const step of props.turn.steps) {
-    for (const run of step.tools) {
-      if (run.name !== 'spawn_subagent') {
-        continue
-      }
-      const subagent = resolveSubagent(run)
-      if (!isMappedSubagent(run, subagent)) {
-        continue
-      }
-      changes = aggregateSubagentFileDiffs(subagent, changes)
-    }
-  }
-  return changes
-})
-
 const showFilesChanged = computed(
-  () => !isStreaming.value && fileChanges.value.length > 0,
+  () => !isStreaming.value && (props.chatFileChanges?.length ?? 0) > 0,
 )
 
 const stepEntries = computed(() =>
@@ -109,13 +92,6 @@ const resolveSubagent = (run: ToolRun): SubagentTimelineItem =>
     props.subagentsByToolCallId ?? new Map(),
     props.subagentsById ?? new Map(),
   )
-
-const isMappedSubagent = (
-  run: ToolRun,
-  subagent: SubagentTimelineItem,
-): boolean =>
-  props.subagentsByToolCallId?.get(run.toolCallId) === subagent ||
-  props.subagentsById?.get(subagent.subagentId) === subagent
 </script>
 
 <template>
@@ -222,8 +198,10 @@ const isMappedSubagent = (
 
     <ChatTurnFilesChanged
       v-if="showFilesChanged"
-      :changes="fileChanges"
+      :changes="chatFileChanges ?? []"
+      :restore-changes="restoreChanges"
       :restore-enabled="restoreEnabled === true"
+      :restore-discards-latest-message="restoreDiscardsLatestMessage"
       @restore="emit('restoreFiles')"
     />
 

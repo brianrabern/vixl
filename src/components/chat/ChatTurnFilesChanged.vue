@@ -34,7 +34,9 @@ import { summarizeMutationCounts } from '@/services/harness/restore-file-checkpo
 
 const props = defineProps<{
   changes: AggregatedTurnFileChange[]
+  restoreChanges?: AggregatedTurnFileChange[]
   restoreEnabled?: boolean
+  restoreDiscardsLatestMessage?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -54,7 +56,15 @@ const totals = computed(() => {
   return { additions, deletions }
 })
 
-const counts = computed(() => summarizeMutationCounts(props.changes))
+const counts = computed(() =>
+  summarizeMutationCounts(props.restoreChanges ?? props.changes),
+)
+
+const hasNarrowerRestoreScope = computed(() => {
+  if (props.restoreChanges === undefined) return false
+  const restorePaths = new Set(props.restoreChanges.map((change) => change.path))
+  return props.changes.some((change) => !restorePaths.has(change.path))
+})
 
 const statusFor = (
   operation: AggregatedTurnFileChange['operation'],
@@ -160,12 +170,18 @@ const handleConfirmRestore = (): void => {
           <AlertDialogTitle>Revert files from this turn?</AlertDialogTitle>
           <AlertDialogDescription>
             This will revert {{ counts.files }} file{{ counts.files === 1 ? '' : 's' }}
-            to the state before this turn
+            to the state before the message that prompted this turn
             <template v-if="counts.created > 0">
               ({{ counts.created }} created file{{ counts.created === 1 ? '' : 's' }} removed)
             </template>
-            and discard the conversation after the preceding message.
+            and discard the conversation after that message.
             Manual edits on those paths will also be overwritten.
+            <template v-if="hasNarrowerRestoreScope">
+              Only files changed since that message are reverted. Earlier changes listed above are kept.
+            </template>
+            <template v-if="restoreDiscardsLatestMessage">
+              Your latest message will also be discarded.
+            </template>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
