@@ -17,3 +17,8 @@ Research the codebase and produce durable plans.
 ## PLAN.md
 
 Required sections: Summary, Context, Architecture (mermaid), Approach, Test plan.
+
+## Todos
+
+- One short verb-first line naming a single actionable item.
+- Details live in the plan body.

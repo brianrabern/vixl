@@ -7,7 +7,7 @@ description: Vixl plans are durable PLAN.md files; Plan mode researches and writ
 
 Plans are durable. Planning is not a throwaway turn. You pay for plan tokens and they are decisions you made. Like database migrations, plans are version-controlled records of a lifecycle, persisted to keep history and ground agents. That is one of the few opinions Vixl has.
 
-A plan is a `PLAN.md` under [`.vixl/plans/`](/concepts/the-vixl-directory): `.vixl/plans/<slug>-<YYYY-MM-DD-HHMMSS>/PLAN.md`. Frontmatter holds id, title, createdAt, `mode: plan`, optional `sourceChatId`, and `todos[]`. Home chats write under the home workspace after that root exists.
+A plan is a `PLAN.md` under [`.vixl/plans/`](/concepts/the-vixl-directory): `.vixl/plans/<slug>-<YYYY-MM-DD-HHMMSS>/PLAN.md`. Frontmatter holds id, title, createdAt, `mode: plan`, optional `sourceChatId`, and `todos[]`. Todos are short verb-first lines; detail lives in the plan body. Home chats write under the home workspace after that root exists.
 
 ## Create a plan in Plan mode
 
