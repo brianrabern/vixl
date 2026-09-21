@@ -2,7 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { planTodoItemSchema } from '@/schemas/plan-document'
 import parsePlan from '@/services/plans/parse-plan'
-import { updatePlanTodos } from '@/services/plans/write-plan'
+import { mergePlanTodos, updatePlanTodos } from '@/services/plans/write-plan'
 import { fsReadFile, fsWriteFile } from '@/services/vixl/vixl-tauri'
 import useWorkbenchStore from '@/composables/use-workbench-store'
 import { HOME_WORKSPACE_ID, isHomeChatSlug } from '@/constants/home-chat'
@@ -15,7 +15,7 @@ import type { HarnessToolContext } from '@/types/harness/tool-context'
 const updatePlanTodo = (ctx: HarnessToolContext) =>
   tool({
     description:
-      'Replace todos in a plan file; omit planPath for the active plan or in-chat Tasks',
+      'Update todos in a plan file; omit planPath for the active plan or in-chat Tasks. Todos merge by id: passed todos update matching ids, new ids append, unmentioned todos keep their state. To drop a todo, mark it cancelled.',
     inputSchema: z.object({
       planPath: z
         .string()
@@ -38,6 +38,7 @@ const updatePlanTodo = (ctx: HarnessToolContext) =>
       const resolvedPlanPath = resolveUpdatePlanTodoPath(
         planPath,
         session.awaitingPlanGo,
+        session.activePlanPath,
       )
       if (!resolvedPlanPath) {
         return { todos: z.array(planTodoItemSchema).parse(todos) }
@@ -50,7 +51,8 @@ const updatePlanTodo = (ctx: HarnessToolContext) =>
       if (parsed.parseError) {
         throw new Error(parsed.parseError)
       }
-      const nextContent = updatePlanTodos(existing.content, todos)
+      const merged = mergePlanTodos(parsed.frontmatter?.todos ?? [], todos)
+      const nextContent = updatePlanTodos(existing.content, merged)
       await fsWriteFile({
         projectRoot: ctx.projectRoot,
         path: resolvedPlanPath,
@@ -73,7 +75,7 @@ const updatePlanTodo = (ctx: HarnessToolContext) =>
         )
         workbench.refreshPlanTabs()
       }
-      return { planPath: resolvedPlanPath, todos }
+      return { planPath: resolvedPlanPath, todos: merged }
     },
   })
 

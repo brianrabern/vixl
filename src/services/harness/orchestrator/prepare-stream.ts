@@ -105,6 +105,7 @@ export default async (input: HarnessStreamInput): Promise<PreparedHarnessStream>
   if (existingMeta) {
     hydratePlanExecutionSession(workspace.projectSlug, chatId, {
       awaitingPlanGo: existingMeta.awaitingPlanGo ?? null,
+      activePlanPath: existingMeta.activePlanPath ?? null,
       subagentModel: existingMeta.subagentModel ?? null,
       subagentReasoning: isReasoningLevel(existingMeta.subagentReasoning)
         ? existingMeta.subagentReasoning

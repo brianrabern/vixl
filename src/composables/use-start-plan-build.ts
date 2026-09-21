@@ -11,13 +11,22 @@ import resolveModelForRole from '@/services/models/resolve-model-for-role'
 import { resolveReasoningForRole } from '@/services/models/resolve-reasoning-for-call'
 import loadPrompt from '@/services/prompts/load-prompt'
 import { setPendingChatMessage } from '@/services/chat/pending-message'
+import parsePlan from '@/services/plans/parse-plan'
 import updatePlanFrontmatter from '@/services/plans/update-plan-frontmatter'
 import {
   clearAwaitingPlanGo,
+  setActivePlanPath,
   setSubagentModelLock,
 } from '@/services/harness/plan-execution-session'
-import { getUserHomeDir, readChatMeta, updateChatMeta } from '@/services/vixl/vixl-tauri'
+import { persistTodoUpdate } from '@/services/harness/orchestrator/persistence'
+import {
+  fsReadFile,
+  getUserHomeDir,
+  readChatMeta,
+  updateChatMeta,
+} from '@/services/vixl/vixl-tauri'
 import chatRouteFor from '@/utils/chat-route-for'
+import type { SessionMutations } from '@/composables/chat-store/types'
 import type { FleetProject } from '@/types/fleet/fleet-project'
 import type { ReasoningLevel } from '@/types/models/reasoning-level'
 import type { VixlChatMode } from '@/types/vixl/vixl-settings'
@@ -36,6 +45,28 @@ export type StartPlanBuildInput = {
   reasoning?: ReasoningLevel
   subagentReasoning?: ReasoningLevel
   executionMode?: PlanExecutionMode
+}
+
+const seedChatTasksFromPlan = async (
+  projectRoot: string,
+  projectSlug: string,
+  chatId: string,
+  planPath: string,
+  session: SessionMutations,
+): Promise<void> => {
+  try {
+    const { content } = await fsReadFile({
+      projectRoot,
+      path: planPath,
+    })
+    const parsed = parsePlan(content)
+    if (parsed.frontmatter?.todos && parsed.frontmatter.todos.length > 0) {
+      await persistTodoUpdate(projectSlug, chatId, parsed.frontmatter.todos)
+      session.appendLocalTodoUpdate(parsed.frontmatter.todos)
+    }
+  } catch {
+    return
+  }
 }
 
 export default () => {
@@ -166,17 +197,27 @@ export default () => {
         model,
         mode: chatMode,
         awaitingPlanGo: null,
+        activePlanPath: input.planPath,
         subagentModel,
         reasoning: reasoning ?? null,
         subagentReasoning: subagentReasoning ?? null,
       })
 
       clearAwaitingPlanGo(project.slug, chatId)
+      setActivePlanPath(project.slug, chatId, input.planPath)
       setSubagentModelLock(
         project.slug,
         chatId,
         subagentModel,
         subagentReasoning ?? null,
+      )
+
+      await seedChatTasksFromPlan(
+        project.rootPath,
+        project.slug,
+        chatId,
+        input.planPath,
+        session,
       )
 
       setPendingChatMessage({

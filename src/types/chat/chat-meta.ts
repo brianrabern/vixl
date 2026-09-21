@@ -36,6 +36,7 @@ export type ChatMeta = {
     summary?: string
   }
   awaitingPlanGo?: AwaitingPlanGo | null
+  activePlanPath?: string | null
   subagentModel?: string | null
   reasoning?: string | null
   subagentReasoning?: string | null

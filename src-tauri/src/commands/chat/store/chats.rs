@@ -6,7 +6,8 @@ use crate::commands::chat::meta::{now_iso, ChatMeta, ChatRecord};
 const CHAT_COLUMNS: &str = "
     id, project_id, project_slug, project_root, title, mode, model, status, attention,
     created_at, updated_at, forked_from, pinned, pinned_at, prefix_snapshot, active_context,
-    awaiting_plan_go, subagent_model, reasoning, subagent_reasoning, usage_totals
+    awaiting_plan_go, subagent_model, reasoning, subagent_reasoning, usage_totals,
+    active_plan_path
 ";
 
 pub fn insert_chat(conn: &Connection, meta: &ChatMeta, project_id: &str) -> Result<(), String> {
@@ -14,8 +15,9 @@ pub fn insert_chat(conn: &Connection, meta: &ChatMeta, project_id: &str) -> Resu
         "INSERT INTO chats (
             id, project_id, project_slug, project_root, title, mode, model, status, attention,
             created_at, updated_at, forked_from, pinned, pinned_at, prefix_snapshot, active_context,
-            awaiting_plan_go, subagent_model, reasoning, subagent_reasoning, usage_totals
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+            awaiting_plan_go, subagent_model, reasoning, subagent_reasoning, usage_totals,
+            active_plan_path
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         params![
             meta.id,
             project_id,
@@ -38,6 +40,7 @@ pub fn insert_chat(conn: &Connection, meta: &ChatMeta, project_id: &str) -> Resu
             meta.reasoning,
             meta.subagent_reasoning,
             opt_json(&meta.usage_totals)?,
+            meta.active_plan_path,
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -67,7 +70,8 @@ pub fn update_chat(conn: &Connection, meta: &ChatMeta, project_id: &str) -> Resu
                 subagent_model = ?18,
                 reasoning = ?19,
                 subagent_reasoning = ?20,
-                usage_totals = ?21
+                usage_totals = ?21,
+                active_plan_path = ?22
              WHERE id = ?1",
             params![
                 meta.id,
@@ -91,6 +95,7 @@ pub fn update_chat(conn: &Connection, meta: &ChatMeta, project_id: &str) -> Resu
                 meta.reasoning,
                 meta.subagent_reasoning,
                 opt_json(&meta.usage_totals)?,
+                meta.active_plan_path,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -199,6 +204,7 @@ struct MappedChat {
     reasoning: Option<String>,
     subagent_reasoning: Option<String>,
     usage_totals: Option<String>,
+    active_plan_path: Option<String>,
 }
 
 fn map_row(row: &Row<'_>) -> rusqlite::Result<MappedChat> {
@@ -224,6 +230,7 @@ fn map_row(row: &Row<'_>) -> rusqlite::Result<MappedChat> {
         reasoning: column_opt_string(row.get_ref(18)?)?,
         subagent_reasoning: column_opt_string(row.get_ref(19)?)?,
         usage_totals: column_opt_string(row.get_ref(20)?)?,
+        active_plan_path: column_opt_string(row.get_ref(21)?)?,
     })
 }
 
@@ -247,6 +254,7 @@ fn row_to_record(row: MappedChat) -> Result<ChatRecord, String> {
             prefix_snapshot: parse_opt_json(row.prefix_snapshot)?,
             active_context: parse_opt_json(row.active_context)?,
             awaiting_plan_go: parse_opt_json(row.awaiting_plan_go)?,
+            active_plan_path: row.active_plan_path,
             subagent_model: row.subagent_model,
             reasoning: row.reasoning,
             subagent_reasoning: row.subagent_reasoning,

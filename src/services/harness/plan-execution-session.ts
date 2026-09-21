@@ -3,6 +3,7 @@ import type { ReasoningLevel } from '@/types/models/reasoning-level'
 
 export type PlanExecutionSession = {
   awaitingPlanGo: AwaitingPlanGo | null
+  activePlanPath: string | null
   subagentModel: string | null
   subagentReasoning: ReasoningLevel | null
   createdPlanThisTurn: boolean
@@ -27,6 +28,7 @@ export const getPlanExecutionSession = (
 
   const created: PlanExecutionSession = {
     awaitingPlanGo: null,
+    activePlanPath: null,
     subagentModel: null,
     subagentReasoning: null,
     createdPlanThisTurn: false,
@@ -40,6 +42,7 @@ export const hydratePlanExecutionSession = (
   chatId: string,
   patch: {
     awaitingPlanGo?: AwaitingPlanGo | null
+    activePlanPath?: string | null
     subagentModel?: string | null
     subagentReasoning?: ReasoningLevel | null
   },
@@ -47,6 +50,9 @@ export const hydratePlanExecutionSession = (
   const session = getPlanExecutionSession(projectSlug, chatId)
   if (patch.awaitingPlanGo !== undefined) {
     session.awaitingPlanGo = patch.awaitingPlanGo
+  }
+  if (patch.activePlanPath !== undefined) {
+    session.activePlanPath = patch.activePlanPath
   }
   if (patch.subagentModel !== undefined) {
     session.subagentModel = patch.subagentModel
@@ -104,6 +110,15 @@ export const clearAwaitingPlanGo = (
 ): void => {
   const session = getPlanExecutionSession(projectSlug, chatId)
   session.awaitingPlanGo = null
+}
+
+export const setActivePlanPath = (
+  projectSlug: string,
+  chatId: string,
+  path: string | null,
+): void => {
+  const session = getPlanExecutionSession(projectSlug, chatId)
+  session.activePlanPath = path
 }
 
 export const setSubagentModelLock = (
@@ -181,10 +196,12 @@ export const assertCreatePlanNotAwaitingPlanGo = (
 }
 
 /**
- * Resolve planPath for update_plan_todo: explicit path wins; otherwise the
- * active awaiting-Go plan. Returns null when neither is available.
+ * Resolve planPath for update_plan_todo: explicit path wins, then the
+ * active awaiting-Go plan, then the session activePlanPath. Returns null when
+ * none is available.
  */
 export const resolveUpdatePlanTodoPath = (
   planPath: string | undefined,
   awaitingPlanGo: AwaitingPlanGo | null,
-): string | null => planPath ?? awaitingPlanGo?.planPath ?? null
+  activePlanPath?: string | null,
+): string | null => planPath ?? awaitingPlanGo?.planPath ?? activePlanPath ?? null

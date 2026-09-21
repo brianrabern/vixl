@@ -103,6 +103,22 @@ const removeTodosBlock = (yaml: string): string => {
   return kept.join('\n')
 }
 
+export const mergePlanTodos = (
+  existing: PlanTodoItem[],
+  incoming: PlanTodoItem[],
+): PlanTodoItem[] => {
+  const merged = [...existing]
+  for (const todo of incoming) {
+    const index = merged.findIndex((item) => item.id === todo.id)
+    if (index === -1) {
+      merged.push(todo)
+    } else {
+      merged[index] = todo
+    }
+  }
+  return merged
+}
+
 export const updatePlanTodos = (
   existingContent: string,
   todos: PlanTodoItem[],

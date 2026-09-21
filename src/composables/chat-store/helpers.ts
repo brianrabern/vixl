@@ -125,6 +125,7 @@ export const mapMeta = (record: {
   prefixSnapshot?: ChatMeta['prefixSnapshot']
   activeContext?: ChatMeta['activeContext']
   awaitingPlanGo?: ChatMeta['awaitingPlanGo']
+  activePlanPath?: ChatMeta['activePlanPath']
   subagentModel?: ChatMeta['subagentModel']
   reasoning?: ChatMeta['reasoning']
   subagentReasoning?: ChatMeta['subagentReasoning']
@@ -147,6 +148,7 @@ export const mapMeta = (record: {
     prefixSnapshot: record.prefixSnapshot,
     activeContext: record.activeContext,
     awaitingPlanGo: record.awaitingPlanGo,
+    activePlanPath: record.activePlanPath,
     subagentModel: record.subagentModel,
     reasoning: record.reasoning,
     subagentReasoning: record.subagentReasoning,

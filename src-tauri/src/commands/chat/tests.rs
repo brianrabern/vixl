@@ -53,6 +53,7 @@ fn sample_meta(id: &str, slug: &str, title: &str, updated_at: &str) -> ChatMeta 
         prefix_snapshot: None,
         active_context: None,
         awaiting_plan_go: None,
+        active_plan_path: None,
         subagent_model: None,
         reasoning: None,
         subagent_reasoning: None,
@@ -231,4 +232,30 @@ fn update_chat_reparents_project_fields() {
     assert_eq!(updated.project_id, "fleet-uuid");
     assert_eq!(updated.meta.project_slug, "game");
     assert_eq!(updated.meta.project_root, "/tmp/game");
+}
+
+#[test]
+fn active_plan_path_survives_insert_update_and_read() {
+    let (_dir, conn) = open_migrated();
+    let mut meta = sample_meta("c1", "slug", "Chat", "2026-01-01T00:00:00Z");
+    meta.active_plan_path = Some(".vixl/plans/example/PLAN.md".to_string());
+    store::insert_chat(&conn, &meta, "pid").expect("insert");
+    let inserted = store::get_chat(&conn, "slug", "c1").expect("get after insert");
+    assert_eq!(
+        inserted.meta.active_plan_path.as_deref(),
+        Some(".vixl/plans/example/PLAN.md")
+    );
+
+    meta.active_plan_path = Some(".vixl/plans/updated/PLAN.md".to_string());
+    store::update_chat(&conn, &meta, "pid").expect("update");
+    let updated = store::get_chat(&conn, "slug", "c1").expect("get after update");
+    assert_eq!(
+        updated.meta.active_plan_path.as_deref(),
+        Some(".vixl/plans/updated/PLAN.md")
+    );
+
+    meta.active_plan_path = None;
+    store::update_chat(&conn, &meta, "pid").expect("clear");
+    let cleared = store::get_chat(&conn, "slug", "c1").expect("get after clear");
+    assert_eq!(cleared.meta.active_plan_path, None);
 }

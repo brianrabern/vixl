@@ -36,6 +36,7 @@ pub fn fork_chat(
         prefix_snapshot: None,
         active_context: None,
         awaiting_plan_go: None,
+        active_plan_path: None,
         subagent_model: None,
         reasoning: None,
         subagent_reasoning: None,

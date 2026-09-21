@@ -24,6 +24,8 @@ pub struct ChatMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub awaiting_plan_go: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_plan_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subagent_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,

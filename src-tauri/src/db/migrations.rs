@@ -129,4 +129,9 @@ pub const MIGRATIONS: &[SqlMigration] = &[
         name: "chat_messages_seq_pk",
         sql: CHAT_MESSAGES_SEQ_PK_V3,
     },
+    SqlMigration {
+        version: 4,
+        name: "chats_active_plan_path",
+        sql: "ALTER TABLE chats ADD COLUMN active_plan_path TEXT;",
+    },
 ];

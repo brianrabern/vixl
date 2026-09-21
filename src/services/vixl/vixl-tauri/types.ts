@@ -99,6 +99,7 @@ export type ChatMetaRecord = {
     planPath: string
     planId: string
   } | null
+  activePlanPath?: string | null
   subagentModel?: string | null
   reasoning?: string | null
   subagentReasoning?: string | null

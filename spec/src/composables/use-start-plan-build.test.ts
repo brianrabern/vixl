@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref, type ComputedRef } from 'vue'
 import { toast } from 'vue-sonner'
 import useStartPlanBuild from '@/composables/use-start-plan-build'
+import createPlan from '@/services/plans/write-plan'
 import type { PendingChatMessage } from '@/services/chat/pending-message'
 import type { PlanBuildFrontmatterPatch } from '@/services/plans/update-plan-frontmatter'
 import type { ChatMeta, ChatStatus } from '@/types/chat/chat-meta'
 import type { ReasoningLevel } from '@/types/models/reasoning-level'
+import type { PlanTodoItem } from '@/types/plans/plan-document'
 
 const createNewChat = vi.hoisted(
   () =>
@@ -56,6 +58,21 @@ const setActiveProject = vi.hoisted(
 )
 const getUserHomeDir = vi.hoisted(
   () => vi.fn<() => Promise<string>>(async () => '/Users/test-home'),
+)
+const fsReadFile = vi.hoisted(
+  () =>
+    vi.fn<(args: { projectRoot: string; path: string }) => Promise<{ content: string }>>(
+      async () => ({ content: '' }),
+    ),
+)
+const persistTodoUpdate = vi.hoisted(
+  () =>
+    vi.fn<(projectSlug: string, chatId: string, todos: PlanTodoItem[]) => Promise<void>>(
+      async () => undefined,
+    ),
+)
+const appendLocalTodoUpdate = vi.hoisted(
+  () => vi.fn<(todos: PlanTodoItem[]) => void>(),
 )
 const loadPromptMock = vi.hoisted(
   () =>
@@ -140,6 +157,7 @@ vi.mock('@/services/plans/update-plan-frontmatter', () => ({
 
 vi.mock('@/services/harness/plan-execution-session', () => ({
   clearAwaitingPlanGo: vi.fn<(projectSlug: string, chatId: string) => void>(),
+  setActivePlanPath: vi.fn<(projectSlug: string, chatId: string, path: string | null) => void>(),
   setSubagentModelLock: vi.fn<
     (
       projectSlug: string,
@@ -150,8 +168,17 @@ vi.mock('@/services/harness/plan-execution-session', () => ({
   >(),
 }))
 
+vi.mock('@/services/harness/orchestrator/persistence', () => ({
+  persistTodoUpdate: (
+    projectSlug: string,
+    chatId: string,
+    todos: PlanTodoItem[],
+  ) => persistTodoUpdate(projectSlug, chatId, todos),
+}))
+
 vi.mock('@/services/vixl/vixl-tauri', () => ({
   getUserHomeDir,
+  fsReadFile: (args: { projectRoot: string; path: string }) => fsReadFile(args),
   readChatMeta: (projectSlug: string, chatId: string) =>
     readChatMetaMock(projectSlug, chatId),
   updateChatMeta: (
@@ -180,6 +207,10 @@ describe('use-start-plan-build', () => {
     setActiveProject.mockClear()
     getUserHomeDir.mockClear()
     getUserHomeDir.mockResolvedValue('/Users/test-home')
+    fsReadFile.mockReset()
+    fsReadFile.mockRejectedValue(new Error('no plan in this test'))
+    persistTodoUpdate.mockClear()
+    appendLocalTodoUpdate.mockClear()
     loadPromptMock.mockClear()
     loadPromptMock.mockReturnValue('build this plan')
     vi.mocked(toast.error).mockClear()
@@ -192,6 +223,7 @@ describe('use-start-plan-build', () => {
           ? ({ id: chatId, status: sessionStatus.value } as ChatMeta)
           : null,
       ),
+      appendLocalTodoUpdate,
     }))
   })
 
@@ -305,5 +337,42 @@ describe('use-start-plan-build', () => {
       planTitle: 'Example plan',
       subagentModel: 'anthropic::claude-sonnet-4',
     })
+  })
+
+  it('binds activePlanPath and seeds chat Tasks from the plan todos', async () => {
+    const created = createPlan({
+      title: 'Example plan',
+      body: '## Goal\n\nShip it.\n',
+      todos: [
+        { id: 'seed-one', content: 'First task', status: 'pending' },
+        { id: 'seed-two', content: 'Second task', status: 'in_progress' },
+      ],
+    })
+    fsReadFile.mockResolvedValue({ content: created.content })
+    const { startPlanBuild } = useStartPlanBuild()
+
+    const result = await startPlanBuild({
+      ...baseInput,
+      freshChat: true,
+    })
+
+    expect(result).toBe(true)
+    expect(updateChatMeta).toHaveBeenCalledWith(
+      'proj',
+      'fresh-chat',
+      expect.objectContaining({
+        activePlanPath: baseInput.planPath,
+      }),
+    )
+    expect(fsReadFile).toHaveBeenCalledWith({
+      projectRoot: '/tmp/proj',
+      path: baseInput.planPath,
+    })
+    const seededTodos = [
+      { id: 'seed-one', content: 'First task', status: 'pending' },
+      { id: 'seed-two', content: 'Second task', status: 'in_progress' },
+    ]
+    expect(persistTodoUpdate).toHaveBeenCalledWith('proj', 'fresh-chat', seededTodos)
+    expect(appendLocalTodoUpdate).toHaveBeenCalledWith(seededTodos)
   })
 })

@@ -58,6 +58,7 @@ export const chatMetaSchema = z.object({
   prefixSnapshot: prefixSnapshotSchema.optional(),
   activeContext: activeContextSchema.optional(),
   awaitingPlanGo: awaitingPlanGoSchema.optional(),
+  activePlanPath: z.string().nullable().optional(),
   subagentModel: z.string().nullable().optional(),
   reasoning: z.string().nullable().optional(),
   subagentReasoning: z.string().nullable().optional(),
