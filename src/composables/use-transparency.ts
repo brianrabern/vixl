@@ -1,4 +1,5 @@
 import { toast } from 'vue-sonner'
+import { runAtomicFlip } from '@/composables/use-theme-flip'
 import {
   applyWindowVibrancy,
   clearWindowVibrancy,
@@ -24,10 +25,14 @@ export default () => {
       config.effectiveSettings.value['appearance.transparency'] !== false
 
     if (!enabled) {
-      document.documentElement.classList.remove('transparency-on')
-      transparencyEnabled.value = false
       try {
-        await clearWindowVibrancy()
+        await runAtomicFlip({
+          cssFlip: () => {
+            document.documentElement.classList.remove('transparency-on')
+            transparencyEnabled.value = false
+          },
+          nativeApply: () => clearWindowVibrancy(),
+        })
       } catch (error) {
         toast.error('Failed to disable window transparency', {
           description: formatUnknownError(error),
@@ -41,7 +46,9 @@ export default () => {
     const intensity =
       config.effectiveSettings.value['appearance.transparencyIntensity'] ?? 0
     try {
-      await applyWindowVibrancy({ dark: isDark, hue, intensity })
+      await runAtomicFlip({
+        nativeApply: () => applyWindowVibrancy({ dark: isDark, hue, intensity }),
+      })
       document.documentElement.classList.add('transparency-on')
       transparencyEnabled.value = true
     } catch (error) {
@@ -56,10 +63,13 @@ export default () => {
       return
     }
 
-    applyWindowVibrancy({
-      dark: mode.state.value === 'dark',
-      hue,
-      intensity,
+    runAtomicFlip({
+      nativeApply: () =>
+        applyWindowVibrancy({
+          dark: mode.state.value === 'dark',
+          hue,
+          intensity,
+        }),
     }).catch((error: unknown) => {
       if (previewErrorShown) {
         return

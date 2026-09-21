@@ -1,4 +1,5 @@
 import { toast } from 'vue-sonner'
+import { runAtomicFlip } from '@/composables/use-theme-flip'
 import { applyWindowVibrancy } from '@/services/vibrancy'
 import formatUnknownError from '@/utils/format-unknown-error'
 
@@ -19,15 +20,25 @@ export default () => {
       const intensity =
         config.effectiveSettings.value['appearance.transparencyIntensity'] ?? 0
       try {
-        await applyWindowVibrancy({ dark: nextDark, hue, intensity })
+        await runAtomicFlip({
+          cssFlip: () => {
+            mode.value = target
+          },
+          nativeApply: () =>
+            applyWindowVibrancy({ dark: nextDark, hue, intensity }),
+        })
       } catch (error) {
         toast.error('Failed to apply window transparency', {
           description: formatUnknownError(error),
         })
       }
+    } else {
+      await runAtomicFlip({
+        cssFlip: () => {
+          mode.value = target
+        },
+      })
     }
-
-    mode.value = target
   }
 
   watch(

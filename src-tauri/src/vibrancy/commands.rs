@@ -14,5 +14,7 @@ pub fn set_window_vibrancy(
 
 #[tauri::command]
 pub fn clear_window_vibrancy(window: tauri::WebviewWindow) {
-    super::clear_platform_vibrancy(&window);
+    let (tx, rx) = mpsc::channel::<()>();
+    super::clear_platform_vibrancy(&window, tx);
+    let _ = rx.recv();
 }

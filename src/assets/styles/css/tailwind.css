@@ -186,3 +186,17 @@ html.transparency-on {
 html.transparency-on .xterm .xterm-viewport {
   background-color: transparent;
 }
+
+/*
+ * Atomic theme flip (html.theme-flip).
+ * Unlayered so this beats Tailwind transition-colors utilities in @layer.
+ * runAtomicFlip sets this class for the native apply plus two animation frames.
+ * Only transitions are frozen: they are what animate theme-color changes.
+ * Keyframe animations must be left alone because toggling animation restarts them.
+ */
+html.theme-flip,
+html.theme-flip *,
+html.theme-flip *::before,
+html.theme-flip *::after {
+  transition: none !important;
+}

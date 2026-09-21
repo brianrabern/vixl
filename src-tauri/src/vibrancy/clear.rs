@@ -1,32 +1,42 @@
-pub fn clear_platform_vibrancy(window: &tauri::WebviewWindow) {
+use std::sync::mpsc::Sender;
+
+pub fn clear_platform_vibrancy(window: &tauri::WebviewWindow, done: Sender<()>) {
     #[cfg(target_os = "macos")]
-    clear_macos(window);
+    clear_macos(window, done);
 
     #[cfg(windows)]
-    clear_windows(window);
+    {
+        clear_windows(window);
+        let _ = done.send(());
+    }
 
     #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = window;
+        let _ = done.send(());
     }
 }
 
 #[cfg(target_os = "macos")]
-fn clear_macos(window: &tauri::WebviewWindow) {
+fn clear_macos(window: &tauri::WebviewWindow, done: Sender<()>) {
     use tauri::Manager;
 
     let handle = window.app_handle().clone();
     let window = window.clone();
+    let queued = done.clone();
     if let Err(error) = handle.run_on_main_thread(move || {
         clear_macos_on_main(&window);
+        let _ = queued.send(());
     }) {
         log::warn!("Failed to clear window vibrancy on the main thread: {error}");
+        let _ = done.send(());
     }
 }
 
 #[cfg(target_os = "macos")]
 fn clear_macos_on_main(window: &tauri::WebviewWindow) {
     use objc2_app_kit::NSWindow;
+    use objc2_quartz_core::CATransaction;
 
     let ns_window_ptr = match window.ns_window() {
         Ok(ptr) => ptr,
@@ -42,7 +52,10 @@ fn clear_macos_on_main(window: &tauri::WebviewWindow) {
     };
 
     if let Some(effect) = super::macos::find_visual_effect_view(&content_view) {
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
         effect.removeFromSuperview();
+        CATransaction::commit();
     }
 }
 
