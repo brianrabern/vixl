@@ -128,6 +128,12 @@ export default () => {
     }
     return harness.value?.compacting.value ?? false
   })
+  const subagentModel = computed(() => {
+    if (!isSubagentView.value) {
+      return null
+    }
+    return paintedSession.value?.getSubagent(subagentId.value)?.model ?? null
+  })
   const pendingQuestion = computed(
     () => paintedSession.value?.pendingQuestion.value ?? null,
   )
@@ -216,6 +222,7 @@ export default () => {
     chatPromptInputRef,
     pendingQuestion,
     compacting,
+    subagentModel,
     timeline,
     todos,
     runningShells,

@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import type { FileUIPart } from 'ai'
-import { PromptInput } from '@/components/ai-elements/prompt-input'
+import { PromptInput, PromptInputSubmit } from '@/components/ai-elements/prompt-input'
 import ChatPromptInput from '@/components/chat/ChatPromptInput.vue'
+import ModelOptionsRow from '@/components/models/options/ModelOptionsRow.vue'
+import formatModelLabelFromRef from '@/utils/format-model-label-from-ref'
 
 const toastError = vi.hoisted(() => vi.fn<(...args: unknown[]) => void>())
 const normalizeAttachmentFiles = vi.hoisted(
@@ -125,9 +127,11 @@ const promptInputContextMenuStub = {
   template: '<div><slot /></div>',
 }
 
-const mountPromptInput = () =>
+const mountPromptInput = (props?: Record<string, unknown>) =>
   shallowMount(ChatPromptInput, {
+    props,
     global: {
+      renderStubDefaultSlot: true,
       stubs: {
         ChatPromptInputContextMenu: promptInputContextMenuStub,
       },
@@ -215,6 +219,54 @@ describe('ChatPromptInput handleSubmit', () => {
         }),
       ],
     ])
+
+    wrapper.unmount()
+  })
+})
+
+describe('ChatPromptInput subagent composer props', () => {
+  it('hides the stop button while streaming when hideStop is set', async () => {
+    const wrapper = mountPromptInput({
+      status: 'streaming',
+      hideStop: true,
+      allowSubmitWhileBusy: true,
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Stop generating"]').exists()).toBe(false)
+    expect(wrapper.findComponent(PromptInputSubmit).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('shows the stop button while streaming by default', async () => {
+    const wrapper = mountPromptInput({ status: 'streaming' })
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Stop generating"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('renders the read-only model label instead of the model picker', async () => {
+    const wrapper = mountPromptInput({ readOnlyModel: 'openai::gpt-4o' })
+    await flushPromises()
+
+    const expectedLabel = formatModelLabelFromRef('openai::gpt-4o')
+    expect(expectedLabel.length).toBeGreaterThan(0)
+    const label = wrapper.find(`span[title="${expectedLabel}"]`)
+    expect(label.exists()).toBe(true)
+    expect(label.text()).toBe(expectedLabel)
+    expect(wrapper.findComponent(ModelOptionsRow).exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('renders the model picker when readOnlyModel is not set', async () => {
+    const wrapper = mountPromptInput()
+    await flushPromises()
+
+    expect(wrapper.findComponent(ModelOptionsRow).exists()).toBe(true)
 
     wrapper.unmount()
   })

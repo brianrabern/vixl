@@ -11,6 +11,7 @@ vi.hoisted(() => {
 
 const viewState = vi.hoisted(() => ({
   isSubagentView: true,
+  subagentModel: 'openai::gpt-4o-mini' as string | null,
 }))
 
 vi.mock('@/components/chat/ChatPromptInput.vue', () => ({
@@ -22,6 +23,8 @@ vi.mock('@/components/chat/ChatPromptInput.vue', () => ({
       'permissionLevel',
       'waitingOnBackground',
       'allowSubmitWhileBusy',
+      'readOnlyModel',
+      'hideStop',
     ],
     template: '<div data-testid="chat-prompt-input" />',
   },
@@ -37,6 +40,7 @@ vi.mock('@/composables/agent-thread-view', () => ({
     projectSlug: computed(() => 'proj'),
     chatId: computed(() => 'chat-1'),
     isSubagentView: computed(() => viewState.isSubagentView),
+    subagentModel: computed(() => viewState.subagentModel),
     threadKey: computed(() => 'proj:chat-1'),
     harnessStatus: computed(() => 'streaming'),
     harnessPendingApprovals: computed(() => [
@@ -144,6 +148,30 @@ describe('AgentThreadView subagent composer', () => {
     )
     expect(wrapper.findComponent({ name: 'ChatStackPillBar' }).exists()).toBe(true)
     expectPromptOutsidePanelMenu(wrapper)
+    wrapper.unmount()
+  })
+
+  it('passes the subagent model and hideStop to ChatPromptInput in the subagent view', () => {
+    viewState.isSubagentView = true
+    viewState.subagentModel = 'openai::gpt-4o-mini'
+    const wrapper = mountView()
+
+    const prompt = wrapper.findComponent({ name: 'ChatPromptInput' })
+    expect(prompt.exists()).toBe(true)
+    expect(prompt.props('readOnlyModel')).toBe('openai::gpt-4o-mini')
+    expect(prompt.props('hideStop')).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('passes null readOnlyModel and hideStop false in the parent view', () => {
+    viewState.isSubagentView = false
+    viewState.subagentModel = 'openai::gpt-4o-mini'
+    const wrapper = mountView()
+
+    const prompt = wrapper.findComponent({ name: 'ChatPromptInput' })
+    expect(prompt.exists()).toBe(true)
+    expect(prompt.props('readOnlyModel')).toBeNull()
+    expect(prompt.props('hideStop')).toBe(false)
     wrapper.unmount()
   })
 })

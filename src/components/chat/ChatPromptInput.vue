@@ -60,6 +60,7 @@ import type { PermissionLevel } from '@/types/harness/permission'
 import type { VixlChatMode } from '@/types/vixl/vixl-settings'
 import type { FileUIPart } from 'ai'
 import contextMentionFromNode from '@/utils/context-mention-from-node'
+import formatModelLabelFromRef from '@/utils/format-model-label-from-ref'
 import normalizeAttachmentFiles from '@/utils/normalize-attachment-files'
 
 const PREFETCH_MIN_FREE_TOKENS = 4000
@@ -73,6 +74,8 @@ const props = withDefaults(
     permissionLevel?: PermissionLevel
     waitingOnBackground?: boolean
     allowSubmitWhileBusy?: boolean
+    readOnlyModel?: string | null
+    hideStop?: boolean
   }>(),
   {
     status: 'ready',
@@ -81,6 +84,8 @@ const props = withDefaults(
     permissionLevel: undefined,
     waitingOnBackground: false,
     allowSubmitWhileBusy: false,
+    readOnlyModel: null,
+    hideStop: false,
   },
 )
 
@@ -171,11 +176,15 @@ const isWaitingOnReply = computed(
 )
 
 const showStop = computed(
-  () => isWaitingOnReply.value || props.waitingOnBackground,
+  () => (isWaitingOnReply.value || props.waitingOnBackground) && !props.hideStop,
 )
 
 const showSubmit = computed(
   () => !showStop.value || props.allowSubmitWhileBusy,
+)
+
+const readOnlyModelLabel = computed(() =>
+  props.readOnlyModel ? formatModelLabelFromRef(props.readOnlyModel) : '',
 )
 
 const isEditing = computed(() => chatStore.editingMessageId.value !== null)
@@ -604,7 +613,15 @@ watch(
             </PromptInputActionMenu>
           </PromptInputTools>
           <PromptInputTools class="ml-auto min-w-0 items-center gap-2">
+            <span
+              v-if="readOnlyModel && readOnlyModelLabel"
+              class="flex h-8 min-w-0 max-w-56 shrink-0 items-center truncate px-2 text-sm text-muted-foreground"
+              :title="readOnlyModelLabel"
+            >
+              {{ readOnlyModelLabel }}
+            </span>
             <ModelsOptionsModelOptionsRow
+              v-else-if="!readOnlyModel"
               :model-value="session.selectedModelRef"
               compact
               hide-disallowed
