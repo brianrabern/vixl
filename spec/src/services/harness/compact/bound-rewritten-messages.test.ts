@@ -166,4 +166,39 @@ describe('boundRewrittenMessages', () => {
     expect(estimatePromptTokens(system, bounded)).toBeLessThanOrEqual(highWater)
     expectPairedTools(bounded)
   })
+
+  it('keeps a framed first user when dropping oldest tail messages', () => {
+    const firstUser: ModelMessage = {
+      role: 'user',
+      content: `${compactBudgets.FIRST_USER_PREFIX}\nSpawn: find the auth bug.`,
+    }
+    const tails: ModelMessage[] = Array.from({ length: 24 }, (_, index) => ({
+      role: index % 2 === 0 ? 'assistant' : 'user',
+      content: 'x'.repeat(4_000),
+    }))
+    const messages: ModelMessage[] = [
+      firstUser,
+      checkpoint('Auth recap'),
+      ...tails,
+    ]
+    const system = 'sys'
+    const highWater = 400
+
+    const bounded = boundRewrittenMessages(messages, system, highWater)
+
+    expect(bounded[0]?.role).toBe('user')
+    expect(
+      bounded[0] && 'content' in bounded[0] ? bounded[0].content : '',
+    ).toBe(firstUser.content)
+    expect(
+      bounded.some(
+        (message) =>
+          typeof message.content === 'string' &&
+          message.content.startsWith(compactBudgets.CHECKPOINT_PREFIX),
+      ),
+    ).toBe(true)
+    expect(bounded.length).toBeLessThan(messages.length)
+    expect(estimatePromptTokens(system, bounded)).toBeLessThanOrEqual(highWater)
+    expectPairedTools(bounded)
+  })
 })

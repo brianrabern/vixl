@@ -33,6 +33,15 @@ const messages: ModelMessage[] = [
 ]
 const signal = new AbortController().signal
 const system = 'You are the parent agent.'
+const validCheckpoint = [
+  'Goal: Find the auth bug at token refresh.',
+  'Decisions: Inspect the refresh path before changing call sites.',
+  'Files+symbols: src/auth/refresh.ts',
+  'Errors+fixes: none yet',
+  'Skills loaded: none',
+  'Plan+todos: none',
+  'Next: Resume from the unanswered user request after this checkpoint.',
+].join('\n')
 
 describe('generateCheckpoint', () => {
   beforeEach(() => {
@@ -42,7 +51,7 @@ describe('generateCheckpoint', () => {
 
   it('calls generateText with the native prefix and compact user instruction', async () => {
     generateText.mockResolvedValueOnce({
-      text: '  Auth is broken at token refresh.  ',
+      text: `  ${validCheckpoint}  `,
       usage: { inputTokens: 10, outputTokens: 4 },
     })
 
@@ -57,7 +66,7 @@ describe('generateCheckpoint', () => {
       signal,
     })
 
-    expect(result.summary).toBe('Auth is broken at token refresh.')
+    expect(result.summary).toBe(validCheckpoint)
     expect(result.modelRef).toEqual(modelRef)
     expect(loadPrompt).toHaveBeenCalledWith('system/compact.md', {
       focus: 'parent',
@@ -92,5 +101,103 @@ describe('generateCheckpoint', () => {
         signal,
       }),
     ).rejects.toThrow('Compaction returned empty summary')
+  })
+
+  it('throws when the summary is missing required Goal and Next sections', async () => {
+    generateText.mockResolvedValueOnce({
+      text: 'Sure, I will look at the auth token refresh path next.',
+    })
+
+    await expect(
+      generateCheckpoint({
+        model,
+        modelRef,
+        system,
+        providerOptions,
+        tools,
+        messages,
+        focus: 'parent',
+        signal,
+      }),
+    ).rejects.toThrow(
+      'Compaction checkpoint missing required sections: Goal, Next',
+    )
+  })
+
+  it('throws when the summary has sections but is too short', async () => {
+    generateText.mockResolvedValueOnce({
+      text: 'Goal: Fix auth.\nNext: Continue.',
+    })
+
+    await expect(
+      generateCheckpoint({
+        model,
+        modelRef,
+        system,
+        providerOptions,
+        tools,
+        messages,
+        focus: 'parent',
+        signal,
+      }),
+    ).rejects.toThrow('Compaction checkpoint is too short')
+  })
+
+  it('throws when Next.js paths appear without a Next section', async () => {
+    generateText.mockResolvedValueOnce({
+      text: [
+        'Goal: Find the auth bug at token refresh.',
+        'Decisions: Inspect the refresh path before changing call sites.',
+        'Files+symbols: Next.js/src/auth.ts',
+        'Errors+fixes: none yet',
+        'Skills loaded: none',
+        'Plan+todos: none',
+      ].join('\n'),
+    })
+
+    await expect(
+      generateCheckpoint({
+        model,
+        modelRef,
+        system,
+        providerOptions,
+        tools,
+        messages,
+        focus: 'parent',
+        signal,
+      }),
+    ).rejects.toThrow(
+      'Compaction checkpoint missing required sections: Next',
+    )
+  })
+
+  it('accepts markdown-wrapped Goal and Next section headers', async () => {
+    const wrappedCheckpoint = [
+      '**Goal**: Find the auth bug at token refresh.',
+      'Decisions: Inspect the refresh path before changing call sites.',
+      'Files+symbols: src/auth/refresh.ts',
+      'Errors+fixes: none yet',
+      'Skills loaded: none',
+      'Plan+todos: none',
+      '## Next: Resume from the unanswered user request after this checkpoint.',
+    ].join('\n')
+
+    generateText.mockResolvedValueOnce({
+      text: wrappedCheckpoint,
+      usage: { inputTokens: 10, outputTokens: 4 },
+    })
+
+    const result = await generateCheckpoint({
+      model,
+      modelRef,
+      system,
+      providerOptions,
+      tools,
+      messages,
+      focus: 'parent',
+      signal,
+    })
+
+    expect(result.summary).toBe(wrappedCheckpoint)
   })
 })

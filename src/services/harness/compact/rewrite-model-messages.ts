@@ -1,36 +1,137 @@
 import type { ModelMessage } from 'ai'
 import estimateTextTokens from '@/utils/estimate-text-tokens'
 import compactBudgets from './budgets'
+import truncateModelMessage, {
+  omitCompactFileParts,
+} from './truncate-model-message'
 
 const estimateMessageTokens = (message: ModelMessage): number =>
   estimateTextTokens(JSON.stringify(message))
 
+const hasAssistantText = (message: ModelMessage): boolean => {
+  if (message.role !== 'assistant') {
+    return false
+  }
+  if (typeof message.content === 'string') {
+    return message.content.trim().length > 0
+  }
+  return message.content.some(
+    (part) => part.type === 'text' && part.text.trim().length > 0,
+  )
+}
+
+const isCheckpointUser = (message: ModelMessage): boolean =>
+  message.role === 'user' &&
+  typeof message.content === 'string' &&
+  message.content.startsWith(compactBudgets.CHECKPOINT_PREFIX)
+
+const lastIndexWhere = (
+  messages: ModelMessage[],
+  predicate: (message: ModelMessage) => boolean,
+): number => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message && predicate(message)) {
+      return index
+    }
+  }
+  return -1
+}
+
+const frameFirstUser = (message: ModelMessage): ModelMessage => {
+  const prefix = compactBudgets.FIRST_USER_PREFIX
+  if (message.role !== 'user') {
+    return message
+  }
+
+  if (typeof message.content === 'string') {
+    if (message.content.startsWith(prefix)) {
+      return message
+    }
+    return { ...message, content: `${prefix}\n${message.content}` }
+  }
+
+  const firstText = message.content.find((part) => part.type === 'text')
+  if (
+    firstText &&
+    firstText.type === 'text' &&
+    firstText.text.startsWith(prefix)
+  ) {
+    return message
+  }
+
+  let prefixed = false
+  const content = message.content.map((part) => {
+    if (prefixed || part.type !== 'text') {
+      return part
+    }
+    prefixed = true
+    return { ...part, text: `${prefix}\n${part.text}` }
+  })
+
+  if (!prefixed) {
+    return {
+      ...message,
+      content: [{ type: 'text' as const, text: prefix }, ...message.content],
+    }
+  }
+
+  return { ...message, content }
+}
+
 export default (messages: ModelMessage[], summary: string): ModelMessage[] => {
-  const firstUserIndex = messages.findIndex((message) => message.role === 'user')
+  const normalized = messages.map(omitCompactFileParts)
+  const firstUserIndex = normalized.findIndex(
+    (message) => message.role === 'user' && !isCheckpointUser(message),
+  )
   const firstUser =
-    firstUserIndex >= 0 ? messages[firstUserIndex] : undefined
+    firstUserIndex >= 0 ? normalized[firstUserIndex] : undefined
   const remaining =
     firstUserIndex >= 0
-      ? messages.filter((_, index) => index !== firstUserIndex)
-      : messages
+      ? normalized.filter((_, index) => index !== firstUserIndex)
+      : normalized
 
-  const reversed = [...remaining].reverse()
+  const guaranteedIndexes = new Set(
+    [
+      lastIndexWhere(remaining, (message) => message.role === 'user'),
+      lastIndexWhere(remaining, hasAssistantText),
+    ].filter((index) => index >= 0),
+  )
+
   const kept: ModelMessage[] = []
   let tokens = 0
+  const budget = compactBudgets.ACTIVE_WINDOW_TOKEN_BUDGET
 
-  for (const message of reversed) {
-    const estimate = estimateMessageTokens(message)
-    if (tokens + estimate > compactBudgets.ACTIVE_WINDOW_TOKEN_BUDGET) {
-      break
+  for (let index = remaining.length - 1; index >= 0; index -= 1) {
+    const message = remaining[index]
+    if (!message) {
+      continue
     }
-    tokens += estimate
-    kept.unshift(message)
+
+    const estimate = estimateMessageTokens(message)
+    if (tokens + estimate <= budget) {
+      tokens += estimate
+      kept.unshift(message)
+      continue
+    }
+
+    if (!guaranteedIndexes.has(index)) {
+      continue
+    }
+
+    const truncated = truncateModelMessage(
+      message,
+      Math.max(0, budget - tokens),
+    )
+    tokens += estimateMessageTokens(truncated)
+    kept.unshift(truncated)
   }
 
   if (kept.length === 0 && remaining.length > 0) {
     const last = remaining[remaining.length - 1]
     if (last) {
-      kept.push(last)
+      const estimate = estimateMessageTokens(last)
+      kept.push(estimate > budget ? truncateModelMessage(last, budget) : last)
     }
   }
 
@@ -40,7 +141,11 @@ export default (messages: ModelMessage[], summary: string): ModelMessage[] => {
   }
 
   if (firstUser) {
-    return [firstUser, checkpoint, ...kept]
+    const framed = truncateModelMessage(
+      frameFirstUser(firstUser),
+      compactBudgets.FIRST_USER_TOKEN_BUDGET,
+    )
+    return [framed, checkpoint, ...kept]
   }
 
   return [checkpoint, ...kept]

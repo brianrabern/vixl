@@ -27,11 +27,27 @@ type RunCompactRewriteResult = {
   compacted: GenerateCheckpointResult | null
 }
 
+const CHECKPOINT_RETRY_NOTE =
+  'Previous output was not a checkpoint. Do not answer the last user message or continue the conversation. Output only the checkpoint sections: Goal, Decisions, Files+symbols, Errors+fixes, Skills loaded, Plan+todos, Next.'
+
 const rewriteMessages = (
   messages: ModelMessage[],
   summary: string,
 ): ModelMessage[] =>
   repairToolPairing(rewriteModelMessages(messages, summary))
+
+const withRetryNote = (
+  checkpointInput: GenerateCheckpointInput,
+): GenerateCheckpointInput => ({
+  ...checkpointInput,
+  messages: [
+    ...checkpointInput.messages,
+    {
+      role: 'user',
+      content: CHECKPOINT_RETRY_NOTE,
+    },
+  ],
+})
 
 export default async (
   input: RunCompactRewriteInput,
@@ -52,7 +68,17 @@ export default async (
       if (input.checkpointInput.signal.aborted) {
         throw error
       }
-      summary = buildFallbackCheckpoint(input.messages)
+      try {
+        compacted = await generateCheckpoint(
+          withRetryNote(input.checkpointInput),
+        )
+        summary = compacted.summary
+      } catch (retryError) {
+        if (input.checkpointInput.signal.aborted) {
+          throw retryError
+        }
+        summary = buildFallbackCheckpoint(input.messages)
+      }
     }
   }
 

@@ -8,6 +8,36 @@ import toCachedInstructions from '@/services/models/to-cached-instructions'
 import formatUnknownError from '@/utils/format-unknown-error'
 import compactBudgets from './budgets'
 
+const REQUIRED_SECTION_MARKERS = ['Goal', 'Next'] as const
+const MIN_CHECKPOINT_CHARS = 80
+
+const hasSectionMarker = (summary: string, marker: string): boolean =>
+  new RegExp(
+    `^\\s*(?:#{1,6}\\s+|\\*\\*\\s*)?${marker}\\b(?:\\s*\\*\\*)?\\s*:`,
+    'm',
+  ).test(summary)
+
+const validateCheckpointSummary = (summary: string): void => {
+  if (!summary) {
+    throw new Error('Compaction returned empty summary')
+  }
+
+  const missing = REQUIRED_SECTION_MARKERS.filter(
+    (marker) => !hasSectionMarker(summary, marker),
+  )
+  if (missing.length > 0) {
+    throw new Error(
+      `Compaction checkpoint missing required sections: ${missing.join(', ')}`,
+    )
+  }
+
+  if (summary.length < MIN_CHECKPOINT_CHARS) {
+    throw new Error(
+      `Compaction checkpoint is too short (${summary.length} chars, min ${MIN_CHECKPOINT_CHARS})`,
+    )
+  }
+}
+
 export default async (
   input: GenerateCheckpointInput,
 ): Promise<GenerateCheckpointResult> => {
@@ -41,9 +71,7 @@ export default async (
     })
 
     const summary = result.text.trim()
-    if (!summary) {
-      throw new Error('Compaction returned empty summary')
-    }
+    validateCheckpointSummary(summary)
 
     return {
       summary,

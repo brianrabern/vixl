@@ -286,7 +286,7 @@ describe('compactSession', () => {
     )
 
     expect(result.usedFallback).toBe(true)
-    expect(generateCheckpoint).toHaveBeenCalledTimes(1)
+    expect(generateCheckpoint).toHaveBeenCalledTimes(2)
     expect(captureBillableUsage).not.toHaveBeenCalled()
     expect(persistCompactionCheckpoint).toHaveBeenCalledWith(
       expect.objectContaining({
