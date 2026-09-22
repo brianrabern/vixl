@@ -1,6 +1,7 @@
 import type { WwwAuthenticateChallenge } from '@/types/mcp/www-authenticate-challenge'
 
-const PARAM = /([a-zA-Z0-9_]+)=(?:"((?:\\.|[^"])*)"|([^\s,]+))/g
+// Backslash stays out of the quoted class so the escape branch cannot overlap it.
+const PARAM = /([a-zA-Z0-9_]+)=(?:"((?:\\.|[^"\\])*)"|([^\s,]+))/g
 
 const unescapeQuoted = (value: string): string =>
   value.replace(/\\(.)/g, '$1')

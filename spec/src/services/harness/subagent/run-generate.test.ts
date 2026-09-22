@@ -50,6 +50,9 @@ const compactStep = vi.hoisted(() =>
 const prepareCompactStep = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => typeof compactStep>(() => compactStep),
 )
+const resolveModelVision = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => false),
+)
 
 vi.mock('ai', () => ({
   generateText: (...args: unknown[]) => generateText(...args),
@@ -74,6 +77,10 @@ vi.mock('@/services/harness/build-harness-tools', () => ({
 
 vi.mock('@/services/harness/subagent/prepare-compact-step', () => ({
   default: (...args: unknown[]) => prepareCompactStep(...args),
+}))
+
+vi.mock('@/services/harness/resolve-model-vision', () => ({
+  default: (...args: unknown[]) => resolveModelVision(...args),
 }))
 
 import runSubagentGenerate from '@/services/harness/subagent/run-generate'

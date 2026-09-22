@@ -24,6 +24,22 @@ describe('parseWwwAuthenticate', () => {
     expect(challenge?.resourceMetadataUrl).toBeUndefined()
   })
 
+  it('unescapes quotes inside bearer params', () => {
+    const challenge = parseWwwAuthenticate(
+      'Bearer scope="read \\"write\\""',
+    )
+
+    expect(challenge?.scope).toBe('read "write"')
+  })
+
+  it('rejects a long unclosed quoted param without backtracking', () => {
+    const header = `Bearer resource_metadata="${'\\!'.repeat(32)}`
+    const started = Date.now()
+
+    expect(parseWwwAuthenticate(header)).toBeUndefined()
+    expect(Date.now() - started).toBeLessThan(100)
+  })
+
   it('ignores non-Bearer schemes and invalid resource_metadata URLs', () => {
     expect(parseWwwAuthenticate('Basic realm="x"')).toBeUndefined()
     expect(
