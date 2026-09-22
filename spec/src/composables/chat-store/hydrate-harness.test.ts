@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import applyHydrateHarnessEvent, {
   type HydrateAccumulator,
 } from '@/composables/chat-store/hydrate-harness'
-import { createFlushTurn } from '@/composables/chat-store/hydrate-lines'
+import {
+  applyHydrateLine,
+  createFlushTurn,
+} from '@/composables/chat-store/hydrate-lines'
 import hydrateTimelineBuilder from '@/composables/chat-store/hydrate-timeline-builder'
 
 const emptyAcc = (): HydrateAccumulator => hydrateTimelineBuilder.createAccumulator()
@@ -557,5 +560,202 @@ describe('hydrate-harness pending subagents', () => {
     expect(item.prompt).toBe('look around harder')
     expect(item.status).toBe('done')
     expect(item.summary).toBe('found things')
+  })
+})
+
+describe('hydrate-harness createdAt stamp', () => {
+  it('stamps a tool-only turn from the first harness line', () => {
+    const acc = emptyAcc()
+    const first = '2026-01-01T00:00:00.000Z'
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'a.ts' },
+        stepId: 'step-1',
+      },
+      noopFlush,
+      first,
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-2',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'b.ts' },
+        stepId: 'step-1',
+      },
+      noopFlush,
+      '2026-01-01T00:00:02.000Z',
+    )
+    expect(acc.pendingTurn?.createdAt).toBe(first)
+  })
+
+  it('uses a dropped step-boundary line as the turn stamp', () => {
+    const acc = emptyAcc()
+    const first = '2026-01-01T00:00:00.000Z'
+    applyHydrateHarnessEvent(
+      acc,
+      { type: 'step-boundary', stepId: 'step-1', action: 'start' },
+      noopFlush,
+      first,
+    )
+    expect(acc.pendingTurn).toBeNull()
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'read_file',
+        status: 'done',
+        stepId: 'step-1',
+      },
+      noopFlush,
+      '2026-01-01T00:00:01.000Z',
+    )
+    expect(acc.pendingTurn?.createdAt).toBe(first)
+  })
+
+  it('does not replace the first-line stamp with a later assistant parts line', () => {
+    const acc = emptyAcc()
+    const flushTurn = createFlushTurn(acc)
+    const first = '2026-01-01T00:00:00.000Z'
+    applyHydrateLine(
+      acc,
+      {
+        id: 'line-1',
+        role: 'assistant',
+        parts: [],
+        createdAt: first,
+        harnessEvent: {
+          type: 'tool-run',
+          toolCallId: 'tc-1',
+          name: 'read_file',
+          status: 'done',
+          args: { path: 'a.ts' },
+          result: { content: 'ok' },
+          stepId: 'step-1',
+        },
+      },
+      flushTurn,
+    )
+    applyHydrateLine(
+      acc,
+      {
+        id: 'line-2',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'done' }],
+        createdAt: '2026-01-01T00:00:05.000Z',
+      },
+      flushTurn,
+    )
+    const item = acc.nextTimeline.find((entry) => entry.type === 'agent-turn')
+    expect(item?.type).toBe('agent-turn')
+    if (item?.type !== 'agent-turn') {
+      return
+    }
+    expect(item.turn.createdAt).toBe(first)
+    expect(acc.nextMessages[0]?.metadata).toEqual({ createdAt: first })
+  })
+
+  it('does not leak a flushed compaction stamp onto the next turn', () => {
+    const acc = emptyAcc()
+    const flushTurn = createFlushTurn(acc)
+    const first = '2026-01-01T00:00:00.000Z'
+    const second = '2026-01-01T00:10:00.000Z'
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'a.ts' },
+        result: { content: 'ok' },
+        stepId: 'step-1',
+      },
+      flushTurn,
+      first,
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      { type: 'compaction', summary: 'Prior work' },
+      flushTurn,
+      '2026-01-01T00:05:00.000Z',
+    )
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-2',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'b.ts' },
+        stepId: 'step-2',
+      },
+      flushTurn,
+      second,
+    )
+    const turns = acc.nextTimeline.filter((item) => item.type === 'agent-turn')
+    expect(turns).toHaveLength(1)
+    const flushed = turns[0]
+    expect(flushed?.type).toBe('agent-turn')
+    if (flushed?.type !== 'agent-turn') {
+      return
+    }
+    expect(flushed.turn.createdAt).toBe(first)
+    expect(acc.pendingTurn?.createdAt).toBe(second)
+  })
+
+  it('does not stamp a later tool-run from a prior subagent-start', () => {
+    const acc = emptyAcc()
+    const early = '2026-01-01T00:00:00.000Z'
+    const later = '2026-01-01T00:00:10.000Z'
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'subagent-start',
+        subagentId: 'sub-1',
+        name: 'explore',
+        blocking: false,
+      },
+      noopFlush,
+      early,
+    )
+    expect(acc.pendingTurn).toBeNull()
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-1',
+        name: 'read_file',
+        status: 'done',
+        stepId: 'step-1',
+      },
+      noopFlush,
+      later,
+    )
+    expect(acc.pendingTurn?.createdAt).toBe(later)
+  })
+
+  it('does not invent a createdAt when none is provided', () => {
+    const acc = emptyAcc()
+    applyHydrateHarnessEvent(
+      acc,
+      {
+        type: 'tool-run',
+        toolCallId: 'tc-legacy',
+        name: 'read_file',
+        status: 'done',
+        args: { path: 'a.ts' },
+      },
+      noopFlush,
+    )
+    expect(acc.pendingTurn?.createdAt).toBeUndefined()
   })
 })

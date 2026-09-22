@@ -21,8 +21,28 @@ const applyHydrateHarnessEvent = (
   acc: HydrateAccumulator,
   harnessEvent: Record<string, unknown>,
   flushTurn: () => void,
+  createdAt?: string,
 ): boolean => {
   const type = harnessEvent.type
+  const isParentTurnPrefixLine =
+    type === 'step-boundary' || type === 'step-text'
+  const canStampPendingTurn =
+    isParentTurnPrefixLine || type === 'tool-run'
+
+  if (
+    !acc.pendingTurn &&
+    createdAt &&
+    !acc.firstLineCreatedAt &&
+    isParentTurnPrefixLine
+  ) {
+    acc.firstLineCreatedAt = createdAt
+  }
+  if (acc.pendingTurn && !acc.pendingTurn.createdAt && canStampPendingTurn) {
+    const stamp = acc.firstLineCreatedAt ?? createdAt
+    if (stamp) {
+      acc.pendingTurn = { ...acc.pendingTurn, createdAt: stamp }
+    }
+  }
 
   if (type === 'todo-update') {
     const todos = parseTodoItems(harnessEvent.todos)
@@ -173,10 +193,12 @@ const applyHydrateHarnessEvent = (
       return true
     }
     if (!acc.pendingTurn) {
+      const stamp = acc.firstLineCreatedAt ?? createdAt
       acc.pendingTurn = {
         id: run.toolCallId,
         steps: [],
         text: '',
+        ...(stamp ? { createdAt: stamp } : {}),
       }
     }
     if (!acc.currentStepId) {

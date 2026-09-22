@@ -19,6 +19,7 @@ export type HydrateAccumulator = {
   nextTimeline: ChatTimelineItem[]
   pendingTurn: AgentTurn | null
   currentStepId: string | null
+  firstLineCreatedAt: string | null
   pendingSubagents: ChatTimelineItem[]
   timelineSubagentIndex: Map<string, number>
   pendingSubagentIndex: Map<string, number>
@@ -44,6 +45,7 @@ const createAccumulator = (): HydrateAccumulator => ({
   nextTimeline: [],
   pendingTurn: null,
   currentStepId: null,
+  firstLineCreatedAt: null,
   pendingSubagents: [],
   timelineSubagentIndex: new Map(),
   pendingSubagentIndex: new Map(),

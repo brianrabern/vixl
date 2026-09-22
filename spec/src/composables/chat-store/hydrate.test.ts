@@ -145,3 +145,70 @@ describe('hydrateSessionFromDisk unfinished subagents', () => {
     expect(item.summary).toBe('found things')
   })
 })
+
+describe('hydrateSessionFromDisk compaction context', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('omits pre-compact assistant messages from the active context slice', async () => {
+    const vixl = await import('@/services/vixl/vixl-tauri')
+    vi.mocked(vixl.readChatMessages).mockResolvedValue([
+      {
+        ...harnessLine('pre-compact', {
+          type: 'tool-run',
+          toolCallId: 'tc-pre',
+          name: 'read_file',
+          status: 'done',
+          args: { path: 'a.ts' },
+          result: { content: 'ok' },
+        }),
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        ...harnessLine('compact-1', {
+          type: 'compaction',
+          summary: 'Prior work',
+          focus: 'parent',
+        }),
+        createdAt: '2026-01-01T00:05:00.000Z',
+      },
+      {
+        ...harnessLine('post-compact', {
+          type: 'tool-run',
+          toolCallId: 'tc-post',
+          name: 'read_file',
+          status: 'done',
+          args: { path: 'b.ts' },
+          result: { content: 'later' },
+        }),
+        createdAt: '2026-01-01T00:10:00.000Z',
+      },
+    ])
+
+    const { createSession } = await import('@/composables/chat-store/helpers')
+    const hydrateSessionFromDisk = (await import('@/composables/chat-store/hydrate'))
+      .default
+    const session = createSession('proj', 'chat-hydrate-compact-filter')
+    await hydrateSessionFromDisk(session)
+
+    const pre = session.messages.value.find((message) => message.id === 'tc-pre')
+    expect(pre).toBeDefined()
+    expect(pre?.metadata).toEqual({ createdAt: '2026-01-01T00:00:00.000Z' })
+    const post = session.messages.value.find((message) => message.id === 'tc-post')
+    expect(post).toBeDefined()
+    expect(post?.metadata).toEqual({ createdAt: '2026-01-01T00:10:00.000Z' })
+
+    const { default: filterMessagesForActiveContext } = await import(
+      '@/services/context/filter-messages-for-active-context'
+    )
+    const { messages, checkpointText } = filterMessagesForActiveContext(
+      session.messages.value,
+      { summary: 'Prior work', includeFromCreatedAt: '2026-01-01T00:05:00.000Z' },
+    )
+    const ids = messages.map((message) => message.id)
+    expect(ids).not.toContain('tc-pre')
+    expect(ids).toContain('tc-post')
+    expect(checkpointText).toContain('Prior work')
+  })
+})

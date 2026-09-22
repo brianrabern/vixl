@@ -23,6 +23,7 @@ export const createFlushTurn = (acc: HydrateAccumulator): (() => void) => {
   return (): void => {
     if (!acc.pendingTurn) {
       hydrateTimelineBuilder.mergePendingSubagents(acc)
+      acc.firstLineCreatedAt = null
       return
     }
     if (acc.currentStepId) {
@@ -50,6 +51,7 @@ export const createFlushTurn = (acc: HydrateAccumulator): (() => void) => {
     hydrateTimelineBuilder.mergePendingSubagents(acc)
     acc.pendingTurn = null
     acc.currentStepId = null
+    acc.firstLineCreatedAt = null
   }
 }
 
@@ -61,7 +63,10 @@ export const applyHydrateLine = (
   const parsed = chatMessageLineSchema.parse(line)
   const harnessEvent = parsed.harnessEvent
 
-  if (harnessEvent && applyHydrateHarnessEvent(acc, harnessEvent, flushTurn)) {
+  if (
+    harnessEvent &&
+    applyHydrateHarnessEvent(acc, harnessEvent, flushTurn, parsed.createdAt)
+  ) {
     return
   }
 
@@ -97,7 +102,7 @@ export const applyHydrateLine = (
           ? [{ id: parsed.id, text: '', reasoning, tools: [] }]
           : [],
         text,
-        createdAt: parsed.createdAt,
+        createdAt: acc.firstLineCreatedAt ?? parsed.createdAt,
       }
     } else {
       let nextTurn: AgentTurn = acc.pendingTurn
