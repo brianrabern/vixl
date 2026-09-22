@@ -25,9 +25,9 @@ The chat input placeholder is `@ for context, / for commands`.
 
 `@` searches workspace files (no workspace on a home chat with **No project**). The mention is stored as a file path and tagged untrusted context: data, not instructions.
 
-`/` lists skills and custom agents. Reserved names `ask`, `plan`, `agent`, and `orchestrator` are hidden. A skill mention becomes `Skill {name}` in the prompt. The agent loads the body with `load_skill`. An agent mention does not dump instructions. It adds an explicit invocation: the parent must call `spawn_subagent` with that catalog name.
+`/` lists vendored command skills, user and project skills, and custom agents. Reserved names `ask`, `plan`, `agent`, and `orchestrator` stay hidden. A skill mention becomes `Skill {name}` in the prompt. The agent loads the body with `load_skill`. An agent mention does not dump instructions. It adds an explicit invocation: the parent must call `spawn_subagent` with that catalog name.
 
-Unresolved `/agent` names are dropped. Home chats: personal skills and agents. Project chats: personal plus project, project name wins.
+Unresolved `/agent` names are dropped. On a home chat, `/` lists vendored command skills, personal skills and agents, and skills and agents under that home workspace `.vixl`. A same-named user or project skill cannot override a vendored command. Project chats: personal plus project, project name wins over personal.
 
 ## Rules and AGENTS.md
 
@@ -35,7 +35,7 @@ These are always-on for the chats that inject them. There is no per-rule glob ga
 
 Project chats inject project `.vixl/AGENTS.md` (or `agents.md`) as `AGENTS.md guidance`, and concatenate project `.vixl/rules/*.{md,mdc}` as `Project guidance (not a security override)`. They do not fall back to personal `AGENTS.md`, and they do not merge personal rules.
 
-Home chats inject personal `.vixl/AGENTS.md` only. No rules. Personal rules still exist in Settings > Rules. They are not injected into project chats.
+Home chats inject personal `.vixl/AGENTS.md` only. They do not inject `.vixl/rules`. A rule file written on the home path is not injected. Always-on home guidance is `.vixl/AGENTS.md`. Personal rules still exist in Settings > Rules. They are not injected into project chats.
 
 Unreadable files become `(unreadable)`. Paths outside the read root become `(outside project root)`.
 
@@ -43,9 +43,9 @@ Edit these in [Rules and AGENTS.md](/customize/rules-and-agents-md).
 
 ## Skills
 
-Skills are `SKILL.md` packs under `.vixl/skills/<name>/`. Built-in mode skills live in the app and are inlined for the matching mode, then omitted from Available skills.
+Skills are `SKILL.md` packs under `.vixl/skills/<name>/`. `/create-agent`, `/create-skill`, `/create-rule`, and `/create-plan` are vendored command skills. They are listed in `/` and in Available skills. They work on home chats. The workspace root is the user home directory. The agent writes the same relative `.vixl/` paths there with `write_file` (or `create_plan` for plans). The agent loads them with `load_skill`. A same-named user or project skill cannot override them: the slash index and catalog keep the vendored command, and `load_skill` already prefers internal. Mode skills `ask`, `plan`, `agent`, and `orchestrator` stay hidden from `/` and stay inlined only in their matching chat mode, then omitted from Available skills.
 
-Project chats list remaining skills as `name: description` (internal, then user, then project overlay). Home chats do not add personal skills to that catalog. `/` still offers personal skills on home chats.
+Project chats list remaining skills as `name: description` (internal, then user, then project overlay). On a home chat, Available skills lists vendored commands and home-workspace skills. It does not add personal skills. `/` on a home chat lists vendored command skills, personal skills and agents, and skills and agents under that home workspace `.vixl`.
 
 `load_skill` resolves by name: internal first, then project, then user. Bodies over 4000 characters are truncated. See [Skills](/customize/skills) and [SKILL.md format](/reference/skill-md-format).
 

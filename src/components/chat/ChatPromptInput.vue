@@ -217,7 +217,29 @@ const promptWorkspaceRoot = computed((): string | null => {
   }
 
   // Agent threads: resolve the same root git/context budget use so @ file
-  // search and slash skills can query the workspace.
+  // search can query the workspace. Slash commands use promptSlashRoot.
+  const fromMeta = chatStore.meta.value?.projectRoot?.trim()
+  if (fromMeta) {
+    return fromMeta
+  }
+  return fleet.activeProject.value?.rootPath ?? null
+})
+
+const promptSlashRoot = computed((): string | null => {
+  if (props.showProjectSelect) {
+    if (session.selectedProjectId === null) {
+      return null
+    }
+    return (
+      fleet.projects.value.find((project) => project.id === session.selectedProjectId)
+        ?.rootPath ?? null
+    )
+  }
+
+  if (chatStore.meta.value?.projectSlug === HOME_CHAT_SLUG) {
+    return chatStore.meta.value.projectRoot?.trim() || null
+  }
+
   const fromMeta = chatStore.meta.value?.projectRoot?.trim()
   if (fromMeta) {
     return fromMeta
@@ -580,6 +602,7 @@ watch(
             class="max-h-28 min-h-10"
             placeholder="@ for context, / for commands"
             :project-root="promptWorkspaceRoot"
+            :slash-root="promptSlashRoot"
           />
         </PromptInputBody>
         <PromptInputFooter class="w-full min-w-0 flex-nowrap px-1 pb-1">

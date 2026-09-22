@@ -7,7 +7,7 @@ import {
   listInternalSkillIndex,
   loadInternalSkill,
 } from '@/services/skills/discover-internal-skills'
-import { listSkillIndex } from '@/services/skills/skill-registry'
+import { listSkillIndex, listStandaloneSkillIndex } from '@/services/skills/skill-registry'
 import { listAgentDefinitions } from '@/services/agents/resolve-agent-definition'
 import formatMcpCatalog from './format-mcp'
 import loadAgentsMdBlock from './load-agents-md-block'
@@ -16,8 +16,7 @@ import { formatMentionBlocks } from './format-mentions'
 import loadToolGuidanceForMode from './load-tool-guidance'
 import type { SystemPromptInput, SystemPromptParts } from './types'
 
-const TOOLS_HINT =
-  'Tools are provided as function calls; do not grep the repo for them.'
+const TOOLS_HINT = 'Tools are provided as function calls; do not grep the repo for them.'
 
 const resolveModeSkillBlock = (mode: VixlChatMode): string => {
   const loaded = loadInternalSkill(mode)
@@ -62,9 +61,9 @@ export default async (input: SystemPromptInput): Promise<SystemPromptParts> => {
     ? []
     : await listVixlFiles('project', 'rules', input.projectRoot).catch(() => [])
 
-  const definitions = await listAgentDefinitions(
-    input.standalone ? null : input.projectRoot,
-  ).catch(() => [])
+  const definitions = await listAgentDefinitions(input.standalone ? null : input.projectRoot).catch(
+    () => [],
+  )
   const agentCatalog =
     definitions.length > 0
       ? definitions.map((agent) => ({
@@ -77,13 +76,11 @@ export default async (input: SystemPromptInput): Promise<SystemPromptParts> => {
 
   const modeSkillBlock = resolveModeSkillBlock(input.mode)
   const rawSkillIndex = input.standalone
-    ? listInternalSkillIndex(input.mode)
+    ? await listStandaloneSkillIndex(input.mode, input.projectRoot).catch(() =>
+        listInternalSkillIndex(input.mode),
+      )
     : await listSkillIndex(input.mode, input.projectRoot).catch(() => [])
-  const skillIndex = omitInlinedModeSkill(
-    rawSkillIndex,
-    input.mode,
-    Boolean(modeSkillBlock),
-  )
+  const skillIndex = omitInlinedModeSkill(rawSkillIndex, input.mode, Boolean(modeSkillBlock))
   const skillIndexBlock =
     skillIndex.length > 0
       ? skillIndex.map((skill) => `- ${skill.name}: ${skill.description}`).join('\n')
@@ -107,8 +104,7 @@ export default async (input: SystemPromptInput): Promise<SystemPromptParts> => {
     : ''
 
   const modeAllowlist = MODE_TOOL_ALLOWLIST[input.mode]
-  const allowMcp =
-    modeAllowlist.includes('get_mcp_tool') || modeAllowlist.includes('get_mcp_tools')
+  const allowMcp = modeAllowlist.includes('get_mcp_tool') || modeAllowlist.includes('get_mcp_tools')
   const mcpCatalog = allowMcp
     ? await formatMcpCatalog(input.projectRoot, input.standalone).catch(() => '')
     : ''

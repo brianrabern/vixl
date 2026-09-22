@@ -3,6 +3,8 @@ import { flushPromises, shallowMount } from '@vue/test-utils'
 import type { FileUIPart } from 'ai'
 import { PromptInput, PromptInputSubmit } from '@/components/ai-elements/prompt-input'
 import ChatPromptInput from '@/components/chat/ChatPromptInput.vue'
+import ChatPromptEditor from '@/components/chat/prompt-editor/ChatPromptEditor.vue'
+import { HOME_CHAT_SLUG } from '@/constants/home-chat'
 import ModelOptionsRow from '@/components/models/options/ModelOptionsRow.vue'
 import formatModelLabelFromRef from '@/utils/format-model-label-from-ref'
 
@@ -65,10 +67,14 @@ vi.mock('@/composables/use-git-branches', () => ({
   }),
 }))
 
+const chatMeta = vi.hoisted(() => ({
+  value: null as { projectSlug?: string; projectRoot?: string } | null,
+}))
+
 vi.mock('@/composables/use-chat-store', () => ({
   default: () => ({
     editingMessageId: { value: null },
-    meta: { value: null },
+    meta: chatMeta,
     cancelEditMessage: vi.fn<() => void>(),
   }),
 }))
@@ -127,6 +133,10 @@ const promptInputContextMenuStub = {
   template: '<div><slot /></div>',
 }
 
+beforeEach(() => {
+  chatMeta.value = null
+})
+
 const mountPromptInput = (props?: Record<string, unknown>) =>
   shallowMount(ChatPromptInput, {
     props,
@@ -140,6 +150,7 @@ const mountPromptInput = (props?: Record<string, unknown>) =>
 
 describe('ChatPromptInput handleSubmit', () => {
   beforeEach(() => {
+    chatMeta.value = null
     toastError.mockClear()
     normalizeAttachmentFiles.mockReset()
     normalizeAttachmentFiles.mockImplementation(async (files) => files)
@@ -219,6 +230,39 @@ describe('ChatPromptInput handleSubmit', () => {
         }),
       ],
     ])
+
+    wrapper.unmount()
+  })
+})
+
+describe('ChatPromptInput prompt roots', () => {
+  beforeEach(() => {
+    chatMeta.value = null
+  })
+
+  it('does not use the fleet project as slash root on a home chat', async () => {
+    chatMeta.value = { projectSlug: HOME_CHAT_SLUG }
+    const wrapper = mountPromptInput()
+    await flushPromises()
+
+    const editor = wrapper.findComponent(ChatPromptEditor)
+    expect(editor.props('projectRoot')).toBeNull()
+    expect(editor.props('slashRoot')).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('uses chat meta projectRoot as slash root on a home chat', async () => {
+    chatMeta.value = {
+      projectSlug: HOME_CHAT_SLUG,
+      projectRoot: '/Users/aidan/home',
+    }
+    const wrapper = mountPromptInput()
+    await flushPromises()
+
+    const editor = wrapper.findComponent(ChatPromptEditor)
+    expect(editor.props('projectRoot')).toBeNull()
+    expect(editor.props('slashRoot')).toBe('/Users/aidan/home')
 
     wrapper.unmount()
   })

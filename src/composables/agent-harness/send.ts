@@ -48,11 +48,7 @@ type SendDeps = {
   maybeDrainQueue: () => Promise<void>
 }
 
-export default (
-  state: AgentHarnessState,
-  attention: AttentionHelpers,
-  deps: SendDeps,
-) => {
+export default (state: AgentHarnessState, attention: AttentionHelpers, deps: SendDeps) => {
   const {
     options,
     session,
@@ -110,14 +106,14 @@ export default (
       return
     }
 
-    const projectRoot = options.standalone ? null : options.projectRoot
+    const settingsRoot = options.standalone ? null : options.projectRoot
+    const catalogRoot = options.projectRoot
     let chatSettings: VixlSettings
     try {
-      chatSettings = await loadEffectiveSettings(projectRoot)
+      chatSettings = await loadEffectiveSettings(settingsRoot)
     } catch (settingsError) {
       toast.error('Failed to load project settings', {
-        description:
-          settingsError instanceof Error ? settingsError.message : 'Unknown error',
+        description: settingsError instanceof Error ? settingsError.message : 'Unknown error',
       })
       return
     }
@@ -131,10 +127,10 @@ export default (
     status.value = 'submitted'
     toolRuns.value = []
 
-    const agentIndex = await listAgentIndex(projectRoot).catch(() => [])
+    const agentIndex = await listAgentIndex(catalogRoot).catch(() => [])
     const mentions = await dropUnresolvedAgentMentions(
       collectExplicitAgentMentions(args.text, args.mentions ?? [], agentIndex),
-      projectRoot,
+      catalogRoot,
     )
 
     const previousAbort = abortController.value
@@ -148,20 +144,14 @@ export default (
         files = await normalizeAttachmentFiles(args.files ?? [])
       } catch (normalizeError) {
         toast.error('Could not attach image', {
-          description:
-            normalizeError instanceof Error
-              ? normalizeError.message
-              : 'Unknown error',
+          description: normalizeError instanceof Error ? normalizeError.message : 'Unknown error',
         })
         status.value = 'ready'
         await fleetSidebar.refreshSlug(options.projectSlug)
         return
       }
 
-      if (
-        args.text.trim().length === 0 &&
-        !files.some((file) => Boolean(file.url))
-      ) {
+      if (args.text.trim().length === 0 && !files.some((file) => Boolean(file.url))) {
         toast.error('Nothing to send', {
           description: 'Attachments could not be restored.',
         })
@@ -180,7 +170,7 @@ export default (
           files,
           mentions,
           agentNames: agentIndex.map((agent) => agent.name),
-          projectRoot,
+          projectRoot: catalogRoot,
           aborted: () => controller.signal.aborted,
         })
         if (!appended) {
@@ -276,8 +266,7 @@ export default (
     } catch (err) {
       const aborted = controller.signal.aborted
       const timedOut =
-        err instanceof Error &&
-        (err.name === 'TimeoutError' || /timeout/i.test(err.message))
+        err instanceof Error && (err.name === 'TimeoutError' || /timeout/i.test(err.message))
       const message = err instanceof Error ? err.message : 'Unknown error'
       const runDescription = describeAgentRunError(message)
       if (aborted) {

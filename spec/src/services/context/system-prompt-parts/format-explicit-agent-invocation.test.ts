@@ -26,4 +26,17 @@ describe('buildMentionInjectionText', () => {
     expect(text).not.toContain('Skill reviewer')
     expect(text.indexOf('explicitly invoked')).toBeLessThan(text.indexOf('Context:'))
   })
+
+  it('includes Skill name lines when a skill mention is present', () => {
+    const text = buildMentionInjectionText([
+      { type: 'skill', name: 'create-rule' },
+      { type: 'file', path: 'src/auth.ts', content: 'export const auth = 1' },
+    ])
+    expect(text).toContain('Skill create-rule')
+    expect(text).not.toContain('Call load_skill')
+    expect(text).not.toContain('before acting')
+    expect(text).toContain('Context:')
+    expect(text).toContain('File src/auth.ts:')
+    expect(text).not.toContain('Available skills:')
+  })
 })

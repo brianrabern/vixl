@@ -26,7 +26,7 @@ export const TOOL_DESCRIPTIONS: Record<string, string> = {
   run_terminal: 'Run a shell command in the project',
   terminal_output: 'Read output from a background agent shell (not subagent ids)',
   stop_terminal: 'Stop a background agent shell',
-  load_skill: 'Load a project skill by name',
+  load_skill: 'Load a skill by name',
   ask_user: 'Ask the user a clarifying question',
   call_mcp_tool: 'Invoke a tool on a configured MCP server',
   get_mcp_tool: 'Fetch the full schema for one MCP tool',

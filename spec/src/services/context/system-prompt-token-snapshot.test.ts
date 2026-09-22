@@ -11,8 +11,7 @@ import estimateBuiltinToolDefinitionTokens from '@/services/context/estimate-bui
 import estimateTextTokens from '@/utils/estimate-text-tokens'
 import type { VixlChatMode } from '@/types/vixl/vixl-settings'
 
-const TOOLS_HINT =
-  'Tools are provided as function calls; do not grep the repo for them.'
+const TOOLS_HINT = 'Tools are provided as function calls; do not grep the repo for them.'
 
 const MODES: VixlChatMode[] = ['ask', 'plan', 'agent', 'orchestrator']
 
@@ -37,11 +36,12 @@ const BASE_CEILINGS: Record<VixlChatMode, number> = {
   orchestrator: 365,
 }
 
+/** Available skills catalog with ungated command skills; measured 59. */
 const SKILLS_CEILINGS: Record<VixlChatMode, number> = {
-  ask: 17,
-  plan: 17,
-  agent: 15,
-  orchestrator: 19,
+  ask: 61,
+  plan: 61,
+  agent: 61,
+  orchestrator: 61,
 }
 
 /**

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { listInternalSkillIndex, loadInternalSkill } from '@/services/skills/discover-internal-skills'
+import {
+  listInternalCommandSkillIndex,
+  listInternalSkillIndex,
+  loadInternalSkill,
+} from '@/services/skills/discover-internal-skills'
 
 describe('discover-internal-skills', () => {
   it('indexes ask skill only in ask mode', () => {
@@ -21,9 +25,9 @@ describe('discover-internal-skills', () => {
     expect(
       listInternalSkillIndex('orchestrator').some((skill) => skill.name === 'orchestrator'),
     ).toBe(true)
-    expect(
-      listInternalSkillIndex('agent').some((skill) => skill.name === 'orchestrator'),
-    ).toBe(false)
+    expect(listInternalSkillIndex('agent').some((skill) => skill.name === 'orchestrator')).toBe(
+      false,
+    )
   })
 
   it('loads ask skill content', () => {
@@ -48,5 +52,30 @@ describe('discover-internal-skills', () => {
     const loaded = loadInternalSkill('orchestrator')
     expect(loaded).not.toBeNull()
     expect(loaded?.content).toContain('Orchestrator mode')
+  })
+
+  it('omits mode-gated skills from the slash-command set', () => {
+    const names = listInternalCommandSkillIndex().map((skill) => skill.name)
+    expect([...names].sort()).toEqual([
+      'create-agent',
+      'create-plan',
+      'create-rule',
+      'create-skill',
+    ])
+    expect(names).not.toContain('ask')
+    expect(names).not.toContain('plan')
+    expect(names).not.toContain('agent')
+    expect(names).not.toContain('orchestrator')
+  })
+
+  it('lists ungated command skills in every mode', () => {
+    const commands = listInternalCommandSkillIndex()
+    const modes = ['ask', 'plan', 'agent', 'orchestrator'] as const
+    expect(commands.length).toBeGreaterThan(0)
+    for (const skill of commands) {
+      for (const mode of modes) {
+        expect(listInternalSkillIndex(mode).some((entry) => entry.name === skill.name)).toBe(true)
+      }
+    }
   })
 })

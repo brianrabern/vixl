@@ -5,10 +5,7 @@ const formatSymbolLocation = (mention: {
   startLine?: number
   endLine?: number
 }): string => {
-  if (
-    typeof mention.startLine === 'number' &&
-    typeof mention.endLine === 'number'
-  ) {
+  if (typeof mention.startLine === 'number' && typeof mention.endLine === 'number') {
     return `${mention.path}:${mention.startLine}-${mention.endLine}`
   }
   if (typeof mention.startLine === 'number') {
@@ -23,37 +20,10 @@ const formatSymbolMention = (mention: {
   startLine?: number
   endLine?: number
   content?: string
-}): string =>
-  `Symbol ${mention.name} (${formatSymbolLocation(mention)}):\n${mention.content ?? ''}`
+}): string => `Symbol ${mention.name} (${formatSymbolLocation(mention)}):\n${mention.content ?? ''}`
 
-const formatCodebaseMention = (mention: {
-  query: string
-  content?: string
-}): string => `Codebase ${mention.query}:\n${mention.content ?? ''}`
-
-export const formatMentionsAsText = (mentions: ContextMention[]): string => {
-  const lines: string[] = []
-
-  for (const mention of mentions) {
-    if (mention.type === 'file') {
-      lines.push(`File ${mention.path}:\n${mention.content ?? ''}`)
-    } else if (mention.type === 'folder') {
-      lines.push(`Folder ${mention.path}:\n${mention.listing ?? ''}`)
-    } else if (mention.type === 'rule') {
-      lines.push(`Rule ${mention.name}`)
-    } else if (mention.type === 'skill') {
-      lines.push(`Skill ${mention.name}`)
-    } else if (mention.type === 'agent') {
-      continue
-    } else if (mention.type === 'symbol') {
-      lines.push(formatSymbolMention(mention))
-    } else if (mention.type === 'codebase') {
-      lines.push(formatCodebaseMention(mention))
-    }
-  }
-
-  return lines.join('\n\n')
-}
+const formatCodebaseMention = (mention: { query: string; content?: string }): string =>
+  `Codebase ${mention.query}:\n${mention.content ?? ''}`
 
 export const formatMentionBlocks = (
   mentions: ContextMention[],
@@ -94,4 +64,9 @@ export const formatMentionBlocks = (
     mentions: mentionLines.join('\n\n'),
     skills: skillLines.join('\n'),
   }
+}
+
+export const formatMentionsAsText = (mentions: ContextMention[]): string => {
+  const { mentions: mentionText, skills } = formatMentionBlocks(mentions)
+  return [skills, mentionText].filter(Boolean).join('\n\n')
 }

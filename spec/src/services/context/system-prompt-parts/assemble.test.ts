@@ -4,8 +4,7 @@ import { mockVixlTauri } from '../../../test-utils/mocks/vixl-tauri'
 vi.mock('@/services/vixl/vixl-tauri', () => mockVixlTauri())
 
 vi.mock('@/services/skills/discover-internal-skills', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/services/skills/discover-internal-skills')>()
+  const actual = await importOriginal<typeof import('@/services/skills/discover-internal-skills')>()
   return {
     ...actual,
     loadInternalSkill: vi.fn<typeof actual.loadInternalSkill>((name) =>
@@ -125,9 +124,7 @@ beforeEach(() => {
 describe('assemble system prompt parts', () => {
   it('replaces the prose tool catalog with a one-line hint', async () => {
     const parts = await assembleSystemPromptParts(input('ask'))
-    expect(parts.tools).toBe(
-      'Tools are provided as function calls; do not grep the repo for them.',
-    )
+    expect(parts.tools).toBe('Tools are provided as function calls; do not grep the repo for them.')
     expect(parts.tools).not.toContain('Available tools in')
     expect(parts.base).not.toContain('- read_file:')
   })
@@ -201,11 +198,7 @@ describe('assemble system prompt parts', () => {
     expect(parts.agentsMd).toContain('AGENTS.md guidance')
     expect(getVixlDir).toHaveBeenCalledWith('personal')
     expect(listVixlFiles).toHaveBeenCalledWith('personal', 'agents-md')
-    expect(listVixlFiles).not.toHaveBeenCalledWith(
-      'project',
-      'agents-md',
-      projectRoot,
-    )
+    expect(listVixlFiles).not.toHaveBeenCalledWith('project', 'agents-md', projectRoot)
     expect(fsReadFile).toHaveBeenCalledWith({
       projectRoot: personalDir,
       path: 'AGENTS.md',
@@ -216,20 +209,16 @@ describe('assemble system prompt parts', () => {
     const parts = await assembleSystemPromptParts(input('agent', { standalone: true }))
     expect(parts.agentsMd).toBe('')
     expect(listVixlFiles).toHaveBeenCalledWith('personal', 'agents-md')
-    expect(listVixlFiles).not.toHaveBeenCalledWith(
-      'project',
-      'agents-md',
-      projectRoot,
-    )
+    expect(listVixlFiles).not.toHaveBeenCalledWith('project', 'agents-md', projectRoot)
     expect(fsReadFile).not.toHaveBeenCalled()
   })
 
   it('discovers AGENTS.md only via listVixlFiles agents-md, never a repo glob', async () => {
     await assembleSystemPromptParts(input('agent', { standalone: false }))
     expect(listVixlFiles).toHaveBeenCalledWith('project', 'agents-md', projectRoot)
-    const agentsMdCalls = vi.mocked(listVixlFiles).mock.calls.filter(
-      (call) => call[1] === 'agents-md',
-    )
+    const agentsMdCalls = vi
+      .mocked(listVixlFiles)
+      .mock.calls.filter((call) => call[1] === 'agents-md')
     expect(agentsMdCalls).toEqual([['project', 'agents-md', projectRoot]])
     expect(fsReadFile).not.toHaveBeenCalled()
   })
@@ -411,12 +400,22 @@ describe('assemble system prompt parts', () => {
     expect(parts.skills).not.toContain('- orchestrator:')
   })
 
+  it('lists home-workspace skills and vendored commands on standalone Available skills', async () => {
+    stubSkillDisks(otherSkills)
+
+    const parts = await assembleSystemPromptParts(input('orchestrator'))
+
+    expect(parts.skills).toContain('Available skills:')
+    expect(parts.skills).toContain('- deploy: Project deploy')
+    expect(parts.skills).toContain('- create-agent:')
+    expect(parts.skills).not.toContain('- notes:')
+    expect(parts.skills).not.toContain('- orchestrator:')
+  })
+
   it('omits the inlined orchestrator skill from Available skills but lists others', async () => {
     stubSkillDisks(otherSkills)
 
-    const parts = await assembleSystemPromptParts(
-      input('orchestrator', { standalone: false }),
-    )
+    const parts = await assembleSystemPromptParts(input('orchestrator', { standalone: false }))
 
     expect(parts.base).toContain('Orchestrator mode')
     expect(parts.skills).toContain('Available skills:')

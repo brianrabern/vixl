@@ -36,9 +36,10 @@ const internalSkills: SkillIndexEntry[] = Object.entries(skillModules).map(([pat
 
 export default (): SkillIndexEntry[] => internalSkills
 
-export const listInternalSkillIndex = (
-  mode: VixlChatMode,
-): SkillIndexEntry[] =>
+export const listInternalCommandSkillIndex = (): SkillIndexEntry[] =>
+  internalSkills.filter((skill) => !INTERNAL_SKILL_MODE_GATES[skill.name])
+
+export const listInternalSkillIndex = (mode: VixlChatMode): SkillIndexEntry[] =>
   internalSkills.filter((skill) => {
     const modes = INTERNAL_SKILL_MODE_GATES[skill.name]
     if (!modes) {
@@ -47,7 +48,9 @@ export const listInternalSkillIndex = (
     return modes.includes(mode)
   })
 
-export const loadInternalSkill = (name: string): {
+export const loadInternalSkill = (
+  name: string,
+): {
   skillDirectory: string
   content: string
   description: string

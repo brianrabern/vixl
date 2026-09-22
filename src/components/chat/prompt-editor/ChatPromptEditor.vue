@@ -34,17 +34,19 @@ const props = withDefaults(
     class?: HTMLAttributes['class']
     placeholder?: string
     projectRoot?: string | null
+    slashRoot?: string | null
   }>(),
   {
     placeholder: '@ for context, / for commands',
     projectRoot: null,
+    slashRoot: null,
   },
 )
 
 const { textInput, setTextInput, addFiles, files, removeFile } = usePromptInput()
 const contextBudgetSync = useChatContextBudgetSync()
 const chatPromptEditor = useChatPromptEditor()
-const slashIndex = useSlashIndex(() => props.projectRoot ?? null)
+const slashIndex = useSlashIndex(() => props.slashRoot ?? null)
 const { readNativeClipboardImage } = useNativeClipboardImage()
 
 const isComposing = ref(false)

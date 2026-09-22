@@ -36,8 +36,12 @@ vi.mock('@/services/providers/list-configured-providers', () => ({
   default: (...args: unknown[]) => listConfiguredProviders(...args),
 }))
 
+const listSlashSkillIndex = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<unknown[]>>().mockResolvedValue([]),
+)
+
 vi.mock('@/services/skills/skill-registry', () => ({
-  listSlashSkillIndex: vi.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+  listSlashSkillIndex: (...args: unknown[]) => listSlashSkillIndex(...args),
 }))
 
 const listAgentIndex = vi.hoisted(() =>
@@ -185,6 +189,7 @@ describe('agent-harness send persist model/mode', () => {
     runOrchestrator.mockResolvedValue(undefined)
     listConfiguredProviders.mockReturnValue(['openai'])
     listAgentIndex.mockResolvedValue([])
+    listSlashSkillIndex.mockResolvedValue([])
     resolveAgentDefinition.mockResolvedValue(null)
     loadEffectiveSettings.mockResolvedValue({ version: 1 })
     hasPendingBackgroundResume.mockReturnValue(false)
@@ -360,9 +365,30 @@ describe('agent-harness send persist model/mode', () => {
     })
 
     expect(loadEffectiveSettings).toHaveBeenCalledWith(null)
+    expect(listAgentIndex).toHaveBeenCalledWith('/tmp/proj')
     expect(runOrchestrator).toHaveBeenCalledWith(
       expect.objectContaining({ settings: personalSettings }),
     )
+  })
+
+  it('lists slash skills from the workspace root on standalone chats', async () => {
+    const state = buildState()
+    state.options.standalone = true
+    const { send } = createSend(state, buildAttention(), {
+      handleEvent: vi.fn<(...args: unknown[]) => void>(),
+      persistPermission: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+      maybeDrainQueue: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    })
+
+    await send({
+      text: 'hello',
+      mode: 'agent',
+      model: 'openai::gpt-4o',
+    })
+
+    expect(loadEffectiveSettings).toHaveBeenCalledWith(null)
+    expect(listSlashSkillIndex).toHaveBeenCalledWith('/tmp/proj')
+    expect(listAgentIndex).toHaveBeenCalledWith('/tmp/proj')
   })
 
   it('turns raw /reviewer text into an agent mention on send', async () => {

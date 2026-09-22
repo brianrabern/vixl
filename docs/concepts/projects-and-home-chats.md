@@ -21,7 +21,7 @@ Adding a folder does not create `<repo>/.vixl`. That directory appears when some
 
 The home chat input has a folder picker: **No project**, then every fleet project. Submit with a project creates a project chat and routes to `/project/:slug/chat/:id`. Submit with **No project** creates a home chat at `/chat/:id`.
 
-Home chats use slug `_home_` and your user home directory as the workspace. They see personal [MCP](https://modelcontextprotocol.io/), skills, and custom agents, plus personal `AGENTS.md`. They do not inject rules. File `@` search has no workspace until a project is selected.
+Home chats use slug `_home_` and your user home directory as the workspace. They see personal [MCP](https://modelcontextprotocol.io/), vendored command skills, personal skills and agents, and skills and agents under that home workspace `.vixl`, plus personal `AGENTS.md`. They do not inject rules. File `@` search has no workspace until a project is selected.
 
 Project chats use that folder as `projectRoot`. They merge personal and project config (project wins for most keys). They inject project `AGENTS.md` and project `.vixl/rules`, not the personal copies. See [The .vixl directory](/concepts/the-vixl-directory) for the merge.
 

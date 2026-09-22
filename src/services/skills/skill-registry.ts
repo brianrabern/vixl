@@ -1,6 +1,7 @@
 import type { VixlChatMode } from '@/types/vixl/vixl-settings'
 import type { LoadedSkill, SkillIndexEntry } from '@/types/skills/skill'
 import {
+  listInternalCommandSkillIndex,
   listInternalSkillIndex,
   loadInternalSkill,
 } from '@/services/skills/discover-internal-skills'
@@ -12,47 +13,91 @@ import { discoverUserSkillIndex, loadUserSkill } from '@/services/skills/discove
 import isReservedSlashName from '@/services/skills/is-reserved-slash-name'
 import { MAX_SKILL_CONTENT_CHARS } from '@/services/skills/strip-skill-frontmatter'
 
+const overlaySkillIndex = (
+  byName: Map<string, SkillIndexEntry>,
+  skills: SkillIndexEntry[],
+  protectedNames?: Set<string>,
+): void => {
+  for (const skill of skills) {
+    const key = skill.name.toLowerCase()
+    if (protectedNames?.has(key)) {
+      continue
+    }
+    byName.set(key, skill)
+  }
+}
+
 export const listUserAndProjectSkillIndex = async (
   projectRoot: string,
 ): Promise<SkillIndexEntry[]> => {
   const user = await discoverUserSkillIndex()
   const project = await discoverProjectSkillIndex(projectRoot)
   const byName = new Map<string, SkillIndexEntry>()
-  for (const skill of user) {
-    byName.set(skill.name.toLowerCase(), skill)
-  }
-  for (const skill of project) {
-    byName.set(skill.name.toLowerCase(), skill)
-  }
+  overlaySkillIndex(byName, user)
+  overlaySkillIndex(byName, project)
   return [...byName.values()]
+}
+
+const loadSkillIndexSafely = async (
+  load: () => Promise<SkillIndexEntry[]>,
+): Promise<SkillIndexEntry[]> => {
+  try {
+    return await load()
+  } catch {
+    return []
+  }
 }
 
 export const listSlashSkillIndex = async (
   projectRoot: string | null,
 ): Promise<SkillIndexEntry[]> => {
-  const skills = projectRoot
-    ? await listUserAndProjectSkillIndex(projectRoot)
-    : await discoverUserSkillIndex()
-  return skills.filter((skill) => !isReservedSlashName(skill.name))
+  const commandSkills = listInternalCommandSkillIndex()
+  const protectedNames = new Set(commandSkills.map((skill) => skill.name.toLowerCase()))
+  const byName = new Map<string, SkillIndexEntry>()
+  overlaySkillIndex(byName, commandSkills)
+  overlaySkillIndex(byName, await loadSkillIndexSafely(discoverUserSkillIndex), protectedNames)
+  if (projectRoot) {
+    overlaySkillIndex(
+      byName,
+      await loadSkillIndexSafely(() => discoverProjectSkillIndex(projectRoot)),
+      protectedNames,
+    )
+  }
+  return [...byName.values()].filter((skill) => !isReservedSlashName(skill.name))
+}
+
+export const listStandaloneSkillIndex = async (
+  mode: VixlChatMode,
+  projectRoot: string,
+): Promise<SkillIndexEntry[]> => {
+  const commandSkills = listInternalCommandSkillIndex()
+  const protectedNames = new Set(commandSkills.map((skill) => skill.name.toLowerCase()))
+  const byName = new Map<string, SkillIndexEntry>()
+  overlaySkillIndex(byName, commandSkills)
+  overlaySkillIndex(byName, listInternalSkillIndex(mode))
+  overlaySkillIndex(
+    byName,
+    await loadSkillIndexSafely(() => discoverProjectSkillIndex(projectRoot)),
+    protectedNames,
+  )
+  return [...byName.values()]
 }
 
 export const listSkillIndex = async (
   mode: VixlChatMode,
   projectRoot: string,
 ): Promise<SkillIndexEntry[]> => {
-  const internal = listInternalSkillIndex(mode)
-  const user = await discoverUserSkillIndex()
-  const project = await discoverProjectSkillIndex(projectRoot)
+  const commandSkills = listInternalCommandSkillIndex()
+  const protectedNames = new Set(commandSkills.map((skill) => skill.name.toLowerCase()))
   const byName = new Map<string, SkillIndexEntry>()
-  for (const skill of internal) {
-    byName.set(skill.name.toLowerCase(), skill)
-  }
-  for (const skill of user) {
-    byName.set(skill.name.toLowerCase(), skill)
-  }
-  for (const skill of project) {
-    byName.set(skill.name.toLowerCase(), skill)
-  }
+  overlaySkillIndex(byName, commandSkills)
+  overlaySkillIndex(byName, listInternalSkillIndex(mode))
+  overlaySkillIndex(byName, await loadSkillIndexSafely(discoverUserSkillIndex), protectedNames)
+  overlaySkillIndex(
+    byName,
+    await loadSkillIndexSafely(() => discoverProjectSkillIndex(projectRoot)),
+    protectedNames,
+  )
   return [...byName.values()]
 }
 

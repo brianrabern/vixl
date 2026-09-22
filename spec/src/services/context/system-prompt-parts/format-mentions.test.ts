@@ -20,14 +20,28 @@ describe('format-mentions', () => {
   })
 
   it('splits skills from other mentions in formatMentionBlocks', () => {
-    const blocks = formatMentionBlocks([
-      fileMention,
-      { type: 'skill', name: 'ask' },
-    ])
+    const blocks = formatMentionBlocks([fileMention, { type: 'skill', name: 'ask' }])
 
     expect(blocks.skills).toBe('Skill ask')
+    expect(blocks.skills).not.toContain('Call load_skill')
+    expect(blocks.skills).not.toContain('before acting')
     expect(blocks.mentions).toContain('File src/utils/foo.ts:')
     expect(blocks.mentions).toContain('export const foo = 1')
+  })
+
+  it('formats skill mentions as Skill name lines', () => {
+    const text = formatMentionsAsText([{ type: 'skill', name: 'ask' }])
+
+    expect(text).toBe('Skill ask')
+    expect(text).not.toContain('Call load_skill')
+    expect(text).not.toContain('before acting')
+  })
+
+  it('does not prefix an empty skills mention block', () => {
+    const blocks = formatMentionBlocks([fileMention])
+
+    expect(blocks.skills).toBe('')
+    expect(blocks.skills).not.toContain('load_skill')
   })
 
   it('omits agent mentions from untrusted Context and Skill lines', () => {
@@ -41,6 +55,8 @@ describe('format-mentions', () => {
     expect(formatMentionsAsText(mentions)).not.toContain('Skill reviewer')
     expect(formatMentionsAsText(mentions)).toContain('File src/utils/foo.ts:')
     expect(formatMentionsAsText(mentions)).toContain('Skill ask')
+    expect(formatMentionsAsText(mentions)).not.toContain('Call load_skill')
+    expect(formatMentionsAsText(mentions)).not.toContain('before acting')
 
     const blocks = formatMentionBlocks(mentions)
     expect(blocks.skills).toBe('Skill ask')

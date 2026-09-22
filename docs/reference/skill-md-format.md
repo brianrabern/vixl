@@ -39,11 +39,13 @@ Loaders strip frontmatter and inject the body. If the loaded body is longer than
 
 ## How a skill is found
 
-Load by name (case-insensitive): internal first, then project, then user. Catalog merge for `/` and the available-skills list: user, then project overlay (project wins). Home chats see personal skills only.
+Load by name (case-insensitive): internal first, then project, then user. Catalog merge for `/` and the available-skills list: vendored command skills first, then user, then project overlay (project wins over user). On a home chat, `/` lists vendored command skills, personal skills, and skills under the home workspace `.vixl`. Available skills lists vendored commands and home-workspace skills. It does not add personal skills.
 
-Reserved slash names cannot run via `/`: `ask`, `plan`, `agent`, `orchestrator`. Those are [chat modes](/concepts/chat-modes). Built-in mode skills are inlined into the system prompt for the matching mode, then omitted from Available skills.
+`/create-agent`, `/create-skill`, `/create-rule`, and `/create-plan` are vendored command skills. They are listed in `/` and in Available skills. They work on home chats. The workspace root is the user home directory. The agent writes the same relative `.vixl/` paths there with `write_file` (or `create_plan` for plans). The agent loads them with `load_skill`. A same-named user or project skill cannot override them: the slash index and catalog keep the vendored command, and `load_skill` already prefers internal.
 
-| Built-in skill | When inlined |
+Reserved slash names cannot run via `/`: `ask`, `plan`, `agent`, `orchestrator`. Those are [chat modes](/concepts/chat-modes). Mode skills stay hidden from `/` and stay inlined only in their matching chat mode, then omitted from Available skills.
+
+| Mode skill | When inlined |
 | --- | --- |
 | `ask` | Ask mode |
 | `plan` | Plan mode |
