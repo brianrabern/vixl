@@ -65,6 +65,16 @@ export const rejectPendingForChat = (chatId: string): void => {
   }
 }
 
+export const rejectPendingForSubagent = (subagentId: string): void => {
+  for (const [toolCallId, entry] of pending.entries()) {
+    if (entry.subagentId !== subagentId) {
+      continue
+    }
+    pending.delete(toolCallId)
+    entry.resolve({ approved: false, scope: 'once' })
+  }
+}
+
 export const resetApprovalGateForTests = (): void => {
   pending.clear()
 }

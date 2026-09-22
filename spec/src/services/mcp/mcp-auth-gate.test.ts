@@ -4,6 +4,7 @@ import {
   listPendingMcpAuthForChat,
   listPendingMcpAuthForServer,
   rejectPendingMcpAuthForChat,
+  rejectPendingMcpAuthForSubagent,
   requestMcpAuth,
   resetMcpAuthGateForTests,
   resolveMcpAuth,
@@ -134,6 +135,69 @@ describe('mcp-auth-gate', () => {
     expect(getPendingMcpAuth('tool-client')?.detail).toContain('client ID')
 
     resolveMcpAuth('tool-client', { action: 'authenticated' })
+    await expect(pending).resolves.toEqual({ action: 'authenticated' })
+  })
+
+  it('rejectPendingMcpAuthForSubagent settles only that subagent entries', async () => {
+    const target = requestMcpAuth({
+      chatId: 'chat-1',
+      toolCallId: 'tool-target',
+      serverId: 'github',
+      scopeKey: 'personal',
+      kind: 'oauth',
+      title: 'Auth target',
+      subagentId: 'sa-1',
+    })
+    const otherSubagent = requestMcpAuth({
+      chatId: 'chat-1',
+      toolCallId: 'tool-other',
+      serverId: 'linear',
+      scopeKey: 'personal',
+      kind: 'oauth',
+      title: 'Auth other',
+      subagentId: 'sa-2',
+    })
+    const parent = requestMcpAuth({
+      chatId: 'chat-1',
+      toolCallId: 'tool-parent',
+      serverId: 'slack',
+      scopeKey: 'personal',
+      kind: 'oauth',
+      title: 'Auth parent',
+    })
+
+    expect(listPendingMcpAuthForChat('chat-1')).toHaveLength(3)
+
+    rejectPendingMcpAuthForSubagent('sa-1')
+
+    await expect(target).resolves.toEqual({ action: 'cancelled' })
+    expect(getPendingMcpAuth('tool-target')).toBeUndefined()
+    expect(getPendingMcpAuth('tool-other')).toBeDefined()
+    expect(getPendingMcpAuth('tool-parent')).toBeDefined()
+    expect(listPendingMcpAuthForChat('chat-1')).toHaveLength(2)
+
+    resolveMcpAuth('tool-other', { action: 'authenticated' })
+    await expect(otherSubagent).resolves.toEqual({ action: 'authenticated' })
+    resolveMcpAuth('tool-parent', { action: 'authenticated' })
+    await expect(parent).resolves.toEqual({ action: 'authenticated' })
+  })
+
+  it('rejectPendingMcpAuthForSubagent is a no-op for unknown ids', async () => {
+    const pending = requestMcpAuth({
+      chatId: 'chat-1',
+      toolCallId: 'tool-keep',
+      serverId: 'github',
+      scopeKey: 'personal',
+      kind: 'oauth',
+      title: 'Auth keep',
+    })
+
+    rejectPendingMcpAuthForSubagent('unknown-subagent')
+
+    expect(getPendingMcpAuth('tool-keep')).toBeDefined()
+    expect(listPendingMcpAuthForChat('chat-1')).toHaveLength(1)
+
+    resolveMcpAuth('tool-keep', { action: 'authenticated' })
     await expect(pending).resolves.toEqual({ action: 'authenticated' })
   })
 

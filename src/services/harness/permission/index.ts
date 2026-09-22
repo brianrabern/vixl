@@ -4,6 +4,7 @@ export { decidePermission, parsePermissionRecords, fsDeleteCapability, fsWriteCa
 export {
   requestApproval,
   rejectPendingForChat,
+  rejectPendingForSubagent,
   type ApprovalResolution,
   type ApprovalKind,
 } from './approval-gate'

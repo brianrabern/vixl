@@ -111,6 +111,7 @@ const createAgentHarness = (options: AgentHarnessOptions) => {
   const lifecycle = createLifecycle(state, attention, {
     send: turnLoop.send,
     stopMcpAuthPolling: approvals.stopMcpAuthPolling,
+    syncPendingMcpAuth: approvals.syncPendingMcpAuth,
     maybeFlushBackgroundSubagentResume: turnLoop.maybeFlushBackgroundSubagentResume,
   })
   const sessionOps = createSessionOps(state, {

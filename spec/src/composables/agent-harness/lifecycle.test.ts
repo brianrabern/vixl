@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref, shallowRef } from 'vue'
 import type { AgentHarnessState, AttentionHelpers } from '@/composables/agent-harness/types'
+import type { PendingApproval } from '@/services/harness/permission/approval-gate'
+import type { PendingApprovalView } from '@/services/harness/permission/gate'
 import { mockVixlTauri } from '../../test-utils/mocks/vixl-tauri'
 
 const abortSubagentsForChat = vi.hoisted(() => vi.fn<(chatId: string) => void>())
@@ -18,6 +20,9 @@ const killShellsForChat = vi.hoisted(() =>
 )
 const rejectPendingMcpAuthForChat = vi.hoisted(() =>
   vi.fn<(chatId: string) => void>(),
+)
+const rejectPendingMcpAuthForSubagent = vi.hoisted(() =>
+  vi.fn<(subagentId: string) => void>(),
 )
 const updateChatMeta = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(undefined),
@@ -38,6 +43,8 @@ vi.mock('@/services/harness/shell/registry', () => ({
 vi.mock('@/services/mcp/mcp-auth-gate', () => ({
   rejectPendingMcpAuthForChat: (chatId: string) =>
     rejectPendingMcpAuthForChat(chatId),
+  rejectPendingMcpAuthForSubagent: (subagentId: string) =>
+    rejectPendingMcpAuthForSubagent(subagentId),
 }))
 
 vi.mock('@/services/vixl/vixl-tauri', () =>
@@ -53,6 +60,39 @@ vi.mock('vue-sonner', () => ({
 }))
 
 import createLifecycle from '@/composables/agent-harness/lifecycle'
+import {
+  getPendingApproval,
+  listPendingApprovalsForChat,
+  requestApproval,
+  resetApprovalGateForTests,
+  resolveApproval,
+} from '@/services/harness/permission/approval-gate'
+
+const makeGateEntry = (
+  overrides: Pick<PendingApproval, 'toolCallId'> &
+    Partial<Pick<PendingApproval, 'chatId' | 'subagentId'>>,
+): Omit<PendingApproval, 'resolve'> => ({
+  chatId: 'chat-1',
+  name: 'write_file',
+  kind: 'fs',
+  action: 'fs.write',
+  capability: 'fs.write:a.txt',
+  title: 'Write file',
+  allowedScopes: ['once', 'session', 'always'],
+  ...overrides,
+})
+
+const makeApprovalView = (
+  toolCallId: string,
+  subagentId?: string,
+): PendingApprovalView => ({
+  toolCallId,
+  name: 'write_file',
+  kind: 'fs',
+  title: 'Write file',
+  allowedScopes: ['once', 'session', 'always'],
+  subagentId,
+})
 
 const buildState = (): AgentHarnessState =>
   ({
@@ -80,6 +120,7 @@ const buildState = (): AgentHarnessState =>
       },
     ]),
     abortController: ref(new AbortController()),
+    pendingApprovals: shallowRef<PendingApprovalView[]>([]),
     pendingMcpAuth: shallowRef([]),
     messageQueue: {
       items: ref([]),
@@ -95,11 +136,20 @@ const buildState = (): AgentHarnessState =>
 const buildAttention = (): AttentionHelpers =>
   ({
     refreshSidebar: vi.fn<() => void>(),
+    maybeClearAttentionWhenGatesEmpty: vi.fn<() => void>(),
   }) as unknown as AttentionHelpers
+
+const buildDeps = () => ({
+  send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+  stopMcpAuthPolling: vi.fn<() => void>(),
+  syncPendingMcpAuth: vi.fn<() => void>(),
+  maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
+})
 
 describe('agent-harness lifecycle stop', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetApprovalGateForTests()
     updateChatMeta.mockResolvedValue(undefined)
     killShellsForChat.mockResolvedValue(undefined)
     listSubagentsForChat.mockReturnValue([])
@@ -107,11 +157,7 @@ describe('agent-harness lifecycle stop', () => {
 
   it('suppresses queue drain and still aborts running subagents', async () => {
     const state = buildState()
-    const { stop } = createLifecycle(state, buildAttention(), {
-      send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const { stop } = createLifecycle(state, buildAttention(), buildDeps())
 
     await stop()
 
@@ -130,11 +176,7 @@ describe('agent-harness lifecycle stop', () => {
     listSubagentsForChat.mockReturnValue([
       { subagentId: 'steered-1', status: 'running' },
     ])
-    const { stop } = createLifecycle(state, buildAttention(), {
-      send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const { stop } = createLifecycle(state, buildAttention(), buildDeps())
 
     await stop()
 
@@ -152,12 +194,8 @@ describe('agent-harness lifecycle stop', () => {
 
   it('clears undelivered pending steers when stopping one subagent', () => {
     const state = buildState()
-    const maybeFlushBackgroundSubagentResume = vi.fn<() => void>()
-    const { stopSubagent } = createLifecycle(state, buildAttention(), {
-      send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume,
-    })
+    const deps = buildDeps()
+    const { stopSubagent } = createLifecycle(state, buildAttention(), deps)
 
     stopSubagent('run-1')
 
@@ -171,7 +209,70 @@ describe('agent-harness lifecycle stop', () => {
       'stopped',
     )
     expect(state.subagents.value[0]?.status).toBe('stopped')
-    expect(maybeFlushBackgroundSubagentResume).toHaveBeenCalled()
+    expect(deps.maybeFlushBackgroundSubagentResume).toHaveBeenCalled()
+  })
+
+  it('drops that subagent approval card and denies its gate', async () => {
+    const state = buildState()
+    state.pendingApprovals.value = [
+      makeApprovalView('tool-target', 'run-1'),
+      makeApprovalView('tool-other', 'run-2'),
+      makeApprovalView('tool-parent'),
+    ]
+    const target = requestApproval(
+      makeGateEntry({ toolCallId: 'tool-target', subagentId: 'run-1' }),
+    )
+    const otherSubagent = requestApproval(
+      makeGateEntry({ toolCallId: 'tool-other', subagentId: 'run-2' }),
+    )
+    const parent = requestApproval(makeGateEntry({ toolCallId: 'tool-parent' }))
+    const attention = buildAttention()
+    const deps = buildDeps()
+    const { stopSubagent } = createLifecycle(state, attention, deps)
+
+    stopSubagent('run-1')
+
+    expect(state.pendingApprovals.value.map((entry) => entry.toolCallId)).toEqual([
+      'tool-other',
+      'tool-parent',
+    ])
+    await expect(target).resolves.toEqual({ approved: false, scope: 'once' })
+    expect(getPendingApproval('tool-target')).toBeUndefined()
+    expect(getPendingApproval('tool-other')).toBeDefined()
+    expect(getPendingApproval('tool-parent')).toBeDefined()
+    expect(listPendingApprovalsForChat('chat-1')).toHaveLength(2)
+    expect(rejectPendingMcpAuthForSubagent).toHaveBeenCalledWith('run-1')
+    expect(deps.syncPendingMcpAuth).toHaveBeenCalled()
+    expect(attention.maybeClearAttentionWhenGatesEmpty).toHaveBeenCalled()
+
+    resolveApproval('tool-other', { approved: true, scope: 'once' })
+    await expect(otherSubagent).resolves.toEqual({ approved: true, scope: 'once' })
+    resolveApproval('tool-parent', { approved: true, scope: 'once' })
+    await expect(parent).resolves.toEqual({ approved: true, scope: 'once' })
+  })
+
+  it('clears pending approval cards on full stop', async () => {
+    const state = buildState()
+    state.pendingApprovals.value = [
+      makeApprovalView('tool-parent'),
+      makeApprovalView('tool-sa', 'run-1'),
+    ]
+    const parent = requestApproval(makeGateEntry({ toolCallId: 'tool-parent' }))
+    const subagent = requestApproval(
+      makeGateEntry({ toolCallId: 'tool-sa', subagentId: 'run-1' }),
+    )
+    const attention = buildAttention()
+    const { stop } = createLifecycle(state, attention, buildDeps())
+
+    await stop()
+
+    expect(state.pendingApprovals.value).toEqual([])
+    expect(state.pendingMcpAuth.value).toEqual([])
+    expect(attention.maybeClearAttentionWhenGatesEmpty).toHaveBeenCalled()
+    await expect(parent).resolves.toEqual({ approved: false, scope: 'once' })
+    await expect(subagent).resolves.toEqual({ approved: false, scope: 'once' })
+    expect(getPendingApproval('tool-parent')).toBeUndefined()
+    expect(getPendingApproval('tool-sa')).toBeUndefined()
   })
 
   it('keeps queued messages and drain suppression after stop', async () => {
@@ -185,11 +286,7 @@ describe('agent-harness lifecycle stop', () => {
         model: 'openai::gpt-4o',
       },
     ]
-    const { stop } = createLifecycle(state, buildAttention(), {
-      send: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const { stop } = createLifecycle(state, buildAttention(), buildDeps())
 
     await stop()
 
@@ -217,19 +314,13 @@ describe('agent-harness lifecycle stop', () => {
         model: 'openai::gpt-4o',
       },
     ]
-    const send = vi
-      .fn<(...args: unknown[]) => Promise<void>>()
-      .mockResolvedValue(undefined)
-    const { forceSendQueued } = createLifecycle(state, buildAttention(), {
-      send,
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const deps = buildDeps()
+    const { forceSendQueued } = createLifecycle(state, buildAttention(), deps)
 
     await forceSendQueued('q-1')
 
     expect(state.suppressQueueDrainAfterStop.value).toBe(true)
-    expect(send).toHaveBeenCalledWith(
+    expect(deps.send).toHaveBeenCalledWith(
       expect.objectContaining({
         text: 'queued',
         internal: true,
@@ -252,18 +343,12 @@ describe('agent-harness lifecycle stop', () => {
         skipUserPersist: true,
       },
     ]
-    const send = vi
-      .fn<(...args: unknown[]) => Promise<void>>()
-      .mockResolvedValue(undefined)
-    const { forceSendQueued } = createLifecycle(state, buildAttention(), {
-      send,
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const deps = buildDeps()
+    const { forceSendQueued } = createLifecycle(state, buildAttention(), deps)
 
     await forceSendQueued('q-1')
 
-    expect(send).toHaveBeenCalledWith(
+    expect(deps.send).toHaveBeenCalledWith(
       expect.objectContaining({
         text: 'queued',
         internal: true,
@@ -285,25 +370,19 @@ describe('agent-harness lifecycle stop', () => {
         model: 'openai::gpt-4o',
       },
     ]
-    const send = vi
-      .fn<(...args: unknown[]) => Promise<void>>()
-      .mockResolvedValue(undefined)
-    const { forceSendQueued } = createLifecycle(state, buildAttention(), {
-      send,
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const deps = buildDeps()
+    const { forceSendQueued } = createLifecycle(state, buildAttention(), deps)
 
     const pending = forceSendQueued('q-1')
     await nextTick()
 
-    expect(send).not.toHaveBeenCalled()
+    expect(deps.send).not.toHaveBeenCalled()
 
     state.compacting.value = false
     await nextTick()
     await pending
 
-    expect(send).toHaveBeenCalledWith(
+    expect(deps.send).toHaveBeenCalledWith(
       expect.objectContaining({
         text: 'queued',
         internal: true,
@@ -323,14 +402,8 @@ describe('agent-harness lifecycle stop', () => {
         model: 'openai::gpt-4o',
       },
     ]
-    const send = vi
-      .fn<(...args: unknown[]) => Promise<void>>()
-      .mockResolvedValue(undefined)
-    const { forceSendQueued } = createLifecycle(state, buildAttention(), {
-      send,
-      stopMcpAuthPolling: vi.fn<() => void>(),
-      maybeFlushBackgroundSubagentResume: vi.fn<() => void>(),
-    })
+    const deps = buildDeps()
+    const { forceSendQueued } = createLifecycle(state, buildAttention(), deps)
 
     const pending = forceSendQueued('q-1')
     await nextTick()
@@ -338,6 +411,6 @@ describe('agent-harness lifecycle stop', () => {
     await nextTick()
     await pending
 
-    expect(send).not.toHaveBeenCalled()
+    expect(deps.send).not.toHaveBeenCalled()
   })
 })

@@ -5,8 +5,15 @@ import {
   clearPendingBackgroundResume,
   listSubagentsForChat,
 } from '@/services/harness/subagent/registry'
+import {
+  rejectPendingForChat,
+  rejectPendingForSubagent,
+} from '@/services/harness/permission/approval-gate'
 import { killShellsForChat } from '@/services/harness/shell/registry'
-import { rejectPendingMcpAuthForChat } from '@/services/mcp/mcp-auth-gate'
+import {
+  rejectPendingMcpAuthForChat,
+  rejectPendingMcpAuthForSubagent,
+} from '@/services/mcp/mcp-auth-gate'
 import { updateChatMeta } from '@/services/vixl/vixl-tauri'
 import waitUntilParentUnblocked from './wait-until-parent-unblocked'
 import type { QueuedChatMessage } from '@/types/chat/queued-chat-message'
@@ -16,6 +23,7 @@ import type { AgentHarnessState, AttentionHelpers } from './types'
 type LifecycleDeps = {
   send: (args: SendArgs) => Promise<void>
   stopMcpAuthPolling: () => void
+  syncPendingMcpAuth: () => void
   maybeFlushBackgroundSubagentResume: () => void
 }
 
@@ -30,6 +38,7 @@ export default (
     status,
     subagents,
     abortController,
+    pendingApprovals,
     pendingMcpAuth,
     messageQueue,
     suppressQueueDrainAfterStop,
@@ -37,6 +46,13 @@ export default (
 
   const stopSubagent = (subagentId: string): void => {
     abortOne(subagentId)
+    rejectPendingForSubagent(subagentId)
+    rejectPendingMcpAuthForSubagent(subagentId)
+    pendingApprovals.value = pendingApprovals.value.filter(
+      (entry) => entry.subagentId !== subagentId,
+    )
+    deps.syncPendingMcpAuth()
+    attention.maybeClearAttentionWhenGatesEmpty()
     session.clearLocalQueuedSubagentSteers(subagentId)
     session.completeLocalSubagent(subagentId, 'Stopped', 'stopped')
     subagents.value = subagents.value.map((item) =>
@@ -52,7 +68,10 @@ export default (
     abortController.value?.abort()
     rejectPendingMcpAuthForChat(options.chatId)
     pendingMcpAuth.value = []
+    rejectPendingForChat(options.chatId)
+    pendingApprovals.value = []
     deps.stopMcpAuthPolling()
+    attention.maybeClearAttentionWhenGatesEmpty()
     const runningIds = new Set([
       ...listSubagentsForChat(options.chatId)
         .filter((record) => record.status === 'running')

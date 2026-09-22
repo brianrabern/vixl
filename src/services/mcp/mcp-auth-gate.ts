@@ -36,6 +36,9 @@ export const getPendingMcpAuth = (toolCallId: string): PendingMcpAuth | undefine
 export const listPendingMcpAuthForChat = (chatId: string): PendingMcpAuth[] =>
   [...pending.values()].filter((entry) => entry.chatId === chatId)
 
+export const listPendingMcpAuthForSubagent = (subagentId: string): PendingMcpAuth[] =>
+  [...pending.values()].filter((entry) => entry.subagentId === subagentId)
+
 export const listPendingMcpAuthForServer = (
   serverId: string,
   scopeKey?: string | null,
@@ -86,6 +89,13 @@ export const patchPendingMcpAuthForServer = (
 
 export const rejectPendingMcpAuthForChat = (chatId: string): void => {
   for (const entry of listPendingMcpAuthForChat(chatId)) {
+    pending.delete(entry.toolCallId)
+    entry.resolve({ action: 'cancelled' })
+  }
+}
+
+export const rejectPendingMcpAuthForSubagent = (subagentId: string): void => {
+  for (const entry of listPendingMcpAuthForSubagent(subagentId)) {
     pending.delete(entry.toolCallId)
     entry.resolve({ action: 'cancelled' })
   }
