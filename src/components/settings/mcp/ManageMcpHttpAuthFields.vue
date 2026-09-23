@@ -52,12 +52,7 @@ const emit = defineEmits<{
       class="space-y-2"
     >
       <div class="flex items-center justify-between gap-2">
-        <div>
-          <Label>Secrets (headers)</Label>
-          <p class="text-xs text-muted-foreground">
-            Header name and value. Enter the secret once; it is stored in the keychain.
-          </p>
-        </div>
+        <Label>Headers</Label>
         <Tooltip>
           <TooltipTrigger as-child>
             <Button
