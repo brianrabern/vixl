@@ -13,33 +13,10 @@ import AiElementsMessageMessageAction from '@/components/ai-elements/message/Mes
 import AiElementsMessageMessageActions from '@/components/ai-elements/message/MessageActions.vue'
 import AiElementsMessageMessageContent from '@/components/ai-elements/message/MessageContent.vue'
 import useChatStore from '@/composables/use-chat-store'
-import type { MentionHighlight } from '@/types/chat/mention-highlight'
 import type { UserMessageMetadata } from '@/types/chat/user-message-metadata'
 import formatModelLabelFromRef from '@/utils/format-model-label-from-ref'
 import formatRelativeTime from '@/utils/format-relative-time'
-
-const parseMentionHighlights = (
-  value: unknown,
-): MentionHighlight[] | undefined => {
-  if (!Array.isArray(value)) {
-    return undefined
-  }
-  const highlights: MentionHighlight[] = []
-  for (const item of value) {
-    if (!item || typeof item !== 'object') {
-      continue
-    }
-    const record = item as Record<string, unknown>
-    if (
-      (record.kind !== 'mention' && record.kind !== 'skill') ||
-      typeof record.token !== 'string'
-    ) {
-      continue
-    }
-    highlights.push({ kind: record.kind, token: record.token })
-  }
-  return highlights.length > 0 ? highlights : undefined
-}
+import parseMentionHighlights from '@/utils/parse-mention-highlights'
 
 const props = defineProps<{
   message: UIMessage
