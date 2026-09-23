@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import type { PendingMcpAuthView } from '@/types/chat/pending-mcp-auth'
 import type { McpConfig, McpServerConfig } from '@/types/vixl/mcp-config'
+import { getMcpAuthMode } from '@/types/vixl/mcp-config'
 import { Button } from '@/components/shadcn/ui/button'
 import { Input } from '@/components/shadcn/ui/input'
 import { Label } from '@/components/shadcn/ui/label'
@@ -42,6 +43,30 @@ const mcpConfig = computed((): McpConfig => {
     return props.projectMcp
   }
   return props.personalMcp
+})
+
+const authMode = computed(() =>
+  serverConfig.value ? getMcpAuthMode(serverConfig.value) : null,
+)
+
+const isOAuthMode = computed((): boolean => {
+  if (authMode.value !== null) {
+    return authMode.value === 'oauth'
+  }
+  return props.auth.kind === 'oauth' || props.auth.kind === 'client'
+})
+
+const showAuthenticate = computed((): boolean => {
+  if (authMode.value === 'headers') {
+    return false
+  }
+  if (authMode.value === 'oauth') {
+    return true
+  }
+  if (authMode.value === 'none') {
+    return props.auth.kind === 'oauth'
+  }
+  return props.auth.kind === 'oauth' || props.auth.kind === 'client'
 })
 
 const persistStaticClient = async (): Promise<boolean> => {
@@ -171,7 +196,7 @@ const handleSaveClient = async (): Promise<void> => {
     />
 
     <div
-      v-if="auth.kind === 'client'"
+      v-if="auth.kind === 'client' && isOAuthMode"
       class="space-y-3"
     >
       <div class="space-y-2">
@@ -203,6 +228,7 @@ const handleSaveClient = async (): Promise<void> => {
 
     <div class="flex flex-wrap gap-2">
       <Button
+        v-if="showAuthenticate"
         size="sm"
         :disabled="savingClient"
         @click="handleAuthenticate"

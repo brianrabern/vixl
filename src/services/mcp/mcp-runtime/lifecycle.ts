@@ -1,6 +1,10 @@
 import type { OAuthClientProvider } from '@ai-sdk/mcp'
 import type { McpHttpServer, McpServerConfig } from '@/types/vixl/mcp-config'
-import { isMcpHttpServer, isMcpStdioServer } from '@/types/vixl/mcp-config'
+import {
+  getMcpAuthMode,
+  isMcpHttpServer,
+  isMcpStdioServer,
+} from '@/types/vixl/mcp-config'
 import { isAllowedMcpUrl } from '@/services/mcp/is-allowed-mcp-url'
 import { assertSafeMcpEnvOverlay } from '@/services/mcp/mcp-dangerous-env'
 import {
@@ -11,7 +15,11 @@ import {
   startHttpServer,
   stopHttpServer,
 } from '@/services/mcp/mcp-http-client'
-import { resolveServerTemplates } from '@/services/mcp/resolve-mcp-inputs'
+import {
+  resolveMcpTemplateEnv,
+  resolveOAuthClientSecret,
+  resolveServerTemplates,
+} from '@/services/mcp/resolve-mcp-inputs'
 import {
   mcpLogout,
   mcpRefresh,
@@ -31,17 +39,21 @@ export const startHttp = async (
 ): Promise<McpServerState> => {
   assertServerTrusted(serverId, config, options)
 
-  if (!isAllowedMcpUrl(config.url)) {
-    throw new Error(
-      'MCP URL must use https, or http on localhost / 127.0.0.1',
-    )
-  }
-
   const scopeKey = options?.scopeKey
+  const authMode = getMcpAuthMode(config)
+  let url = config.url
   let headers: Record<string, string> | undefined
+  let clientSecret: string | undefined
   try {
-    const resolved = await resolveServerTemplates(serverId, config)
+    const env = await resolveMcpTemplateEnv(config)
+    const resolved = await resolveServerTemplates(serverId, config, env)
+    if (resolved.url) {
+      url = resolved.url
+    }
     headers = resolved.headers
+    if (authMode === 'oauth' && !authProvider) {
+      clientSecret = await resolveOAuthClientSecret(serverId, config)
+    }
   } catch (error) {
     if (
       error instanceof Error &&
@@ -53,14 +65,21 @@ export const startHttp = async (
     throw error
   }
 
+  if (!isAllowedMcpUrl(url)) {
+    throw new Error(
+      'MCP URL must use https, or http on localhost / 127.0.0.1',
+    )
+  }
+
   const resolvedConfig: McpHttpServer = {
     ...config,
+    url,
     headers,
   }
 
-  const provider =
-    authProvider ??
-    createTokenProvider(
+  let provider = authProvider
+  if (authMode !== 'headers' && !provider) {
+    provider = createTokenProvider(
       serverId,
       resolvedConfig,
       'http://127.0.0.1/oauth-pending',
@@ -69,13 +88,27 @@ export const startHttp = async (
       },
       options?.confirmAuthorizationServerOrigin,
       false,
+      clientSecret,
     )
+  }
 
   try {
-    return await startHttpServer(serverId, resolvedConfig, {
-      authProvider: provider,
+    const state = await startHttpServer(serverId, resolvedConfig, {
+      ...(provider ? { authProvider: provider } : {}),
       scopeKey,
     })
+    if (
+      state.status === 'auth_required' &&
+      getMcpAuthMode(resolvedConfig) === 'headers'
+    ) {
+      return markHttpAuthRequired(
+        serverId,
+        resolvedConfig,
+        'auth_required:inputs',
+        scopeKey,
+      )
+    }
+    return state
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (
@@ -84,7 +117,14 @@ export const startHttp = async (
       ) ||
       error instanceof Error && error.name === 'UnauthorizedError'
     ) {
-      return markHttpAuthRequired(serverId, resolvedConfig, message, scopeKey)
+      const mappedMessage =
+        authMode === 'headers' ? 'auth_required:inputs' : message
+      return markHttpAuthRequired(
+        serverId,
+        resolvedConfig,
+        mappedMessage,
+        scopeKey,
+      )
     }
     throw error
   }
@@ -97,10 +137,15 @@ export const startStdio = async (
 ): Promise<McpServerState> => {
   assertServerTrusted(serverId, config, options)
 
+  let command = config.command
   let args = config.args ?? []
   let serverEnv: Record<string, string> | undefined
   try {
-    const resolved = await resolveServerTemplates(serverId, config)
+    const env = await resolveMcpTemplateEnv(config)
+    const resolved = await resolveServerTemplates(serverId, config, env)
+    if (resolved.command) {
+      command = resolved.command
+    }
     if (resolved.args) {
       args = resolved.args
     }
@@ -119,10 +164,11 @@ export const startStdio = async (
 
   return mcpStart(
     serverId,
-    config.command,
+    command,
     args,
     serverEnv,
     options?.scopeKey ?? undefined,
+    config.envFile,
   )
 }
 

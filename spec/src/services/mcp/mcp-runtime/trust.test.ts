@@ -12,6 +12,7 @@ vi.mock('@/services/vixl/vixl-tauri', () =>
   }),
 )
 
+import { mcpKnownSecretKeys } from '@/services/mcp/mcp-keychain-keys'
 import {
   assertServerTrusted,
   clearServerSecrets,
@@ -25,14 +26,46 @@ const stdioConfig: McpStdioServer = {
   },
 }
 
+const oauthConfig = {
+  type: 'http' as const,
+  url: 'https://mcp.example/mcp',
+  auth: 'oauth' as const,
+  headers: {
+    Authorization: 'Bearer ${input:token}',
+  },
+}
+
 describe('mcp-runtime trust', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('clears known secrets for a server', async () => {
-    await clearServerSecrets('demo', stdioConfig)
-    expect(deleteSecret.mock.calls.length).toBeGreaterThan(0)
+  it('clears oauth secrets without wiping input secrets', async () => {
+    await clearServerSecrets('demo', oauthConfig)
+    const keys = deleteSecret.mock.calls.map((call) => call[0])
+    expect(keys).toEqual(mcpKnownSecretKeys('demo'))
+    expect(keys.some((key) => String(key).includes(':input:'))).toBe(false)
+  })
+
+  it('does not clear secrets for header auth servers', async () => {
+    await clearServerSecrets('demo', {
+      type: 'http',
+      url: 'https://mcp.example/mcp',
+      auth: 'headers',
+      headers: {
+        Authorization: 'Bearer ${input:token}',
+      },
+    })
+    expect(deleteSecret).not.toHaveBeenCalled()
+  })
+
+  it('does not clear secrets for none auth servers', async () => {
+    await clearServerSecrets('demo', {
+      type: 'http',
+      url: 'https://mcp.example/mcp',
+      auth: 'none',
+    })
+    expect(deleteSecret).not.toHaveBeenCalled()
   })
 
   it('skips trust when skipTrustCheck is set', () => {

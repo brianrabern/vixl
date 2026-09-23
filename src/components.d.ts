@@ -226,6 +226,7 @@ declare module 'vue' {
     Loader: typeof import('./components/ai-elements/loader/Loader.vue')['default']
     LoaderIcon: typeof import('./components/ai-elements/loader/LoaderIcon.vue')['default']
     LspServersSection: typeof import('./components/settings/sections/LspServersSection.vue')['default']
+    ManageMcpHttpAuthFields: typeof import('./components/settings/mcp/ManageMcpHttpAuthFields.vue')['default']
     ManageMcpServerDialog: typeof import('./components/settings/mcp/ManageMcpServerDialog.vue')['default']
     ManageProviderDialog: typeof import('./components/settings/providers/ManageProviderDialog.vue')['default']
     MarkdownWithMermaid: typeof import('./components/workbench/plans/MarkdownWithMermaid.vue')['default']

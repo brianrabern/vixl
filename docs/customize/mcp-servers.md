@@ -38,7 +38,21 @@ Args are comma-separated. Env rows become `${input:KEY}` secrets. Stdio is a [Ta
 
 ### http and sse
 
-URL is required. `https` is allowed. `http` is allowed only on `localhost`, `127.0.0.1`, or `::1`. Header rows are secrets. Optional **OAuth client ID** (blank means dynamic registration). Optional **Allowed authorization servers**, one origin URL per line; if empty, you confirm the origin on first login.
+URL is required and may include `${input:...}` and `${env:...}` templates. Templates are replaced with a placeholder, then the result must parse as a URL. `https` is allowed. `http` is allowed only on `localhost`, `127.0.0.1`, or `::1`.
+
+`auth` is optional and one of `"none"`, `"headers"`, or `"oauth"`:
+
+| Mode | When to use |
+| --- | --- |
+| `none` | Public server. Set `auth` to `"none"` explicitly. No OAuth block. |
+| `headers` | Static header auth, for example a bearer token. `headers` must be present and non-empty. |
+| `oauth` | Browser OAuth for this HTTP or SSE server. |
+
+If `auth` is omitted, Vixl infers it: a non-empty `headers` object means header auth; an `oauth` block or neither field means OAuth. Use explicit `"none"` for public servers. Stdio servers are always none.
+
+Header rows are secrets. Bearer token example: set `auth` to `"headers"` and `Authorization` to `Bearer ${input:Authorization}`.
+
+Optional **OAuth client ID** (blank means dynamic registration). Optional **OAuth client secret** as `${input:...}` (never plaintext). Optional **scopes**. Optional **callback port** (positive integer). Optional **authorization server metadata URL**. Optional **Allowed authorization servers**, one origin URL per line; if empty, you confirm the origin on first login.
 
 HTTP and SSE run in the [Vue](https://vuejs.org) process via [`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp) ([AI SDK](https://ai-sdk.dev)).
 
@@ -54,7 +68,7 @@ Trust does not skip [permission](/concepts/permissions-and-approvals) gates. `mc
 
 ## Keychain secrets
 
-Declared inputs store as `vixl:mcp:{serverId}:input:{inputId}`. Header and env values use `${input:id}` templates. `${env:NAME}` is also substituted. Missing input at start sets status `auth_required:inputs`.
+Declared inputs store as `vixl:mcp:{serverId}:input:{inputId}`. Header, env, and HTTP URL values use `${input:id}` templates. `${env:NAME}` is also substituted. Missing input at start sets status `auth_required:inputs`.
 
 A key icon opens the secrets form on servers that declare inputs. Badge: **Secrets configured**.
 

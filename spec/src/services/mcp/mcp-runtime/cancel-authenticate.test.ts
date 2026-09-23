@@ -58,11 +58,14 @@ vi.mock('@/services/mcp/mcp-http-client', () => ({
 
 vi.mock('@/services/mcp/mcp-oauth-fetch', () => ({
   mcpOAuthFetch: vi.fn<(...args: unknown[]) => unknown>(),
+  withAuthServerMetadataUrl: (fetchFn: unknown) => fetchFn,
 }))
 
 vi.mock('@/services/mcp/oauth', () => ({
   applyOAuthCallback: vi.fn<(...args: unknown[]) => unknown>(),
   getLastOAuthChallenge: vi.fn<(...args: unknown[]) => undefined>(() => undefined),
+  unionScopes: (previous?: string, challenge?: string) =>
+    [previous, challenge].filter((value) => value && value.length > 0).join(' '),
 }))
 
 vi.mock('@/services/mcp/mcp-runtime/lifecycle', () => ({
@@ -86,6 +89,7 @@ import connectionKey from '@/services/mcp/connection-key'
 const httpConfig: McpHttpServer = {
   type: 'http',
   url: 'https://example.com/mcp',
+  auth: 'oauth',
 }
 
 describe('cancelAuthenticate', () => {

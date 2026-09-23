@@ -46,16 +46,19 @@ const createStartServer = (
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const authRequired = message.startsWith('auth_required')
       patchServerState(serverId, {
         serverId,
-        status: 'error',
+        status: authRequired ? 'auth_required' : 'error',
         tools: [],
         error: message,
       }, options?.scopeKey)
       if (!options?.quiet) {
-        toast.error('Failed to start server', {
-          description: message,
-        })
+        if (!authRequired) {
+          toast.error('Failed to start server', {
+            description: message,
+          })
+        }
         return
       }
       throw error instanceof Error ? error : new Error(message)

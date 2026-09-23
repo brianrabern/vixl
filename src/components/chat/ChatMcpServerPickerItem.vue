@@ -18,6 +18,7 @@ import {
 } from '@/components/shadcn/ui/tooltip'
 import McpServerIcon from '@/components/mcp/ServerIcon.vue'
 import { isMcpServerEnabled } from '@/schemas/mcp-config'
+import { canShowMcpOAuthLoginControl } from '@/types/vixl/mcp-config'
 import type { EffectiveMcpServer } from '@/services/mcp/merge-mcp-config'
 import connectionKey from '@/services/mcp/connection-key'
 
@@ -38,6 +39,10 @@ const stateKey = computed(() => connectionKey(props.scopeKey, props.server.id))
 
 const serverStatus = computed(
   (): string => serverStates.value[stateKey.value]?.status ?? 'stopped',
+)
+
+const serverError = computed(
+  (): string | null => serverStates.value[stateKey.value]?.error ?? null,
 )
 
 const isLoading = computed(
@@ -120,7 +125,7 @@ const handleToggle = (): void => {
       {{ server.id }}
     </span>
 
-    <Tooltip v-if="enabled && serverStatus === 'auth_required'">
+    <Tooltip v-if="enabled && canShowMcpOAuthLoginControl(server.config, serverStatus, serverError)">
       <TooltipTrigger as-child>
         <Button
           type="button"

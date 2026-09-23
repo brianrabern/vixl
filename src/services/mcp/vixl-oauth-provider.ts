@@ -29,6 +29,8 @@ type CreateVixlOAuthProviderArgs = {
   serverId: string
   serverUrl: string
   clientId?: string
+  clientSecret?: string
+  scopes?: string[]
   allowedAuthorizationServers?: string[]
   redirectUrl: string
   openUrl: (url: string, allowedOrigin: string) => void | Promise<void>
@@ -54,12 +56,15 @@ export const createVixlOAuthProvider = (
     serverId,
     serverUrl,
     clientId,
+    clientSecret,
+    scopes,
     allowedAuthorizationServers,
     redirectUrl,
     openUrl,
     confirmAuthorizationServerOrigin,
     allowDynamicRegistration = true,
   } = args
+  const resolvedClientSecret = clientSecret?.trim()
 
   const storedIssuer = async (): Promise<string | undefined> => {
     const stored = parseJson<StoredOAuthAsInfo>(
@@ -81,7 +86,18 @@ export const createVixlOAuthProvider = (
     },
 
     get clientMetadata() {
-      return nativeClientMetadata(redirectUrl)
+      const metadata = nativeClientMetadata(redirectUrl)
+      const scope =
+        scopes && scopes.length > 0
+          ? scopes.filter((item) => item.length > 0).join(' ')
+          : undefined
+      return {
+        ...metadata,
+        ...(scope ? { scope } : {}),
+        ...(resolvedClientSecret
+          ? { token_endpoint_auth_method: 'client_secret_post' }
+          : {}),
+      }
     },
 
     tokens: async (): Promise<OAuthTokens | undefined> =>
@@ -123,20 +139,20 @@ export const createVixlOAuthProvider = (
         }
       }
       const staticClient = await loadStaticOAuthClient(serverId)
+      const secret =
+        resolvedClientSecret && resolvedClientSecret.length > 0
+          ? resolvedClientSecret
+          : staticClient?.client_secret
       if (clientId) {
         return {
           client_id: clientId,
-          ...(staticClient?.client_secret
-            ? { client_secret: staticClient.client_secret }
-            : {}),
+          ...(secret ? { client_secret: secret } : {}),
         }
       }
       if (staticClient) {
         return {
           client_id: staticClient.client_id,
-          ...(staticClient.client_secret
-            ? { client_secret: staticClient.client_secret }
-            : {}),
+          ...(secret ? { client_secret: secret } : {}),
         }
       }
       return undefined

@@ -23,11 +23,8 @@ Read and write go through `read_mcp_config` / `write_mcp_config`. A missing file
     "docs": {
       "type": "http",
       "url": "https://example.com/mcp",
-      "headers": { "Authorization": "${input:Authorization}" },
-      "oauth": {
-        "clientId": "optional-static-client",
-        "allowedAuthorizationServers": ["https://auth.example.com"]
-      },
+      "auth": "headers",
+      "headers": { "Authorization": "Bearer ${input:Authorization}" },
       "enabled": true
     }
   },
@@ -58,15 +55,47 @@ Stdio is a [Tauri](https://v2.tauri.app/) child process over stdin/stdout. It do
 
 ## HTTP and SSE servers
 
-HTTP and SSE servers set `type` to `"http"` or `"sse"` and require `url` (must parse as a URL). Optional: `headers`, `oauth`, `enabled`.
+HTTP and SSE servers set `type` to `"http"` or `"sse"` and require `url`. `url` may include `${input:id}` and `${env:NAME}` templates. Templates are replaced with a placeholder, then the result must parse as a URL. Optional: `auth`, `headers`, `oauth`, `enabled`.
 
 URL policy: `https`, or `http` only on `localhost`, `127.0.0.1`, or `::1`. These clients run in the [Vue](https://vuejs.org/) UI process via [`@ai-sdk/mcp`](https://ai-sdk.dev/).
 
-`oauth` is `{ "clientId"?: string, "allowedAuthorizationServers"?: string[] }`. Authorization server URLs must be valid URLs. Tokens and client secrets stay in the keychain (`vixl:mcp:<serverId>:oauth:tokens` and related keys).
+`auth` is `"none"`, `"headers"`, or `"oauth"`:
+
+| Value | Mode |
+| --- | --- |
+| `"none"` | No credentials. Set this explicitly for public servers. Do not include an `oauth` block. |
+| `"headers"` | Static headers. `headers` must be present and non-empty. |
+| `"oauth"` | OAuth. Use the `oauth` object for pre-registration. |
+
+When `auth` is omitted, Vixl infers the mode: a non-empty `headers` object means `"headers"`; an `oauth` object or neither field means `"oauth"`. Use explicit `"none"` for public servers. Stdio servers are always `"none"`.
+
+Bearer token example:
+
+```json
+{
+  "type": "http",
+  "url": "https://example.com/mcp",
+  "auth": "headers",
+  "headers": { "Authorization": "Bearer ${input:Authorization}" }
+}
+```
+
+`oauth` fields:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `clientId` | string | Optional static client id. Blank means dynamic registration. |
+| `clientSecret` | string | Optional. Must be a `${input:...}` template, never plaintext. |
+| `scopes` | string[] | Optional OAuth scopes. |
+| `callbackPort` | number | Optional. Positive integer for the local callback server. |
+| `authServerMetadataUrl` | string | Optional. Must be a valid URL. |
+| `allowedAuthorizationServers` | string[] | Optional. Each value must be a valid URL. |
+
+Tokens and client secrets stay in the keychain (`vixl:mcp:<serverId>:oauth:tokens` and related keys).
 
 ## Templates and inputs
 
-Values in `args`, `env`, and `headers` may contain `${input:id}` and `${env:NAME}`. Missing input at start sets status `auth_required` and opens the secrets form. Missing env throws `Missing environment variable: NAME`.
+Values in `args`, `env`, `headers`, and HTTP `url` may contain `${input:id}` and `${env:NAME}`. Missing input at start sets status `auth_required` and opens the secrets form. Missing env throws `Missing environment variable: NAME`.
 
 Each input is:
 

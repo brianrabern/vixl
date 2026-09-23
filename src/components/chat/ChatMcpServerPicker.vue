@@ -15,6 +15,7 @@ import { toast } from 'vue-sonner'
 import useProjectMcpConfig from '@/composables/mcp-servers/use-project-mcp-config'
 import useMcpTrustChoice from '@/composables/mcp-servers/use-mcp-trust-choice'
 import { isMcpServerEnabled } from '@/schemas/mcp-config'
+import { canShowMcpOAuthLoginControl } from '@/types/vixl/mcp-config'
 import type { EffectiveMcpServer } from '@/services/mcp/merge-mcp-config'
 import connectionKey from '@/services/mcp/connection-key'
 import type { SettingsTab } from '@/composables/use-vixl-config'
@@ -170,6 +171,16 @@ const handleToggleChange = async (
 }
 
 const handleLogin = async (server: EffectiveMcpServer): Promise<void> => {
+  const state = stateFor(server)
+  if (
+    !canShowMcpOAuthLoginControl(
+      server.config,
+      state?.status ?? 'stopped',
+      state?.error,
+    )
+  ) {
+    return
+  }
   await requireTrust(server.id, server.config, async () => {
     try {
       await authenticateServer(server.id, server.config, {

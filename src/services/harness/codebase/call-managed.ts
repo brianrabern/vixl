@@ -7,8 +7,12 @@ import {
   mcpAuthErrorMessage,
   mcpAuthKindForError,
 } from '@/services/harness/mcp/auth'
-import { CODEGRAPH_SERVER_ID } from '@/types/codegraph/managed-codegraph'
+import {
+  buildCodegraphServer,
+  CODEGRAPH_SERVER_ID,
+} from '@/types/codegraph/managed-codegraph'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
+import { getMcpAuthMode } from '@/types/vixl/mcp-config'
 
 type ManagedCodegraphCallResult =
   | { ok: true; result: unknown }
@@ -72,7 +76,10 @@ const callManagedCodegraphTool = async (
       return { ok: false, payload: { error: message } }
     }
 
-    const kind = mcpAuthKindForError(error)
+    const kind = mcpAuthKindForError(
+      error,
+      getMcpAuthMode(buildCodegraphServer(ctx.projectRoot)),
+    )
     const resolution = await requestMcpAuth({
       chatId: ctx.chatId,
       toolCallId: args.toolCallId,

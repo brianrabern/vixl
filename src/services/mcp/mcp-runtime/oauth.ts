@@ -14,11 +14,14 @@ export const createTokenProvider = (
   openUrl: (url: string, allowedOrigin: string) => Promise<void>,
   confirmAuthorizationServerOrigin?: (origin: string) => Promise<boolean>,
   allowDynamicRegistration = true,
+  clientSecret?: string,
 ): OAuthClientProvider =>
   createVixlOAuthProvider({
     serverId,
     serverUrl: config.url,
     clientId: config.oauth?.clientId,
+    clientSecret,
+    scopes: config.oauth?.scopes,
     allowedAuthorizationServers: config.oauth?.allowedAuthorizationServers,
     redirectUrl,
     openUrl,

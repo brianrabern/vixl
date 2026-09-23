@@ -13,6 +13,7 @@ import { vi } from 'vitest'
 export function createVixlTauriMock(overrides: Record<string, unknown> = {}) {
   return {
     isTauri: vi.fn<() => boolean>(() => true),
+    getEnvVars: vi.fn<(names: string[]) => Promise<Record<string, string>>>(async () => ({})),
     getSecret: vi.fn<(key: string) => Promise<string | null>>(async () => null),
     setSecret: vi.fn<(key: string, value: string) => Promise<void>>(async () => {}),
     deleteSecret: vi.fn<(key: string) => Promise<void>>(async () => {}),

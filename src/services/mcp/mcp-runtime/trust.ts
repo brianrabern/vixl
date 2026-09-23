@@ -1,7 +1,6 @@
-import type { McpServerConfig } from '@/types/vixl/mcp-config'
+import { getMcpAuthMode, type McpServerConfig } from '@/types/vixl/mcp-config'
 import { mcpKnownSecretKeys } from '@/services/mcp/mcp-keychain-keys'
 import { mcpServerFingerprint } from '@/services/mcp/mcp-server-fingerprint'
-import { listRequiredInputIdsForServer } from '@/services/mcp/resolve-mcp-inputs'
 import { isMcpTrusted, sessionTrusts } from '@/services/mcp/mcp-trust'
 import { isInternalMcpServer } from '@/types/codegraph/managed-codegraph'
 import { deleteSecret } from '@/services/vixl/vixl-tauri'
@@ -11,8 +10,10 @@ export const clearServerSecrets = async (
   serverId: string,
   config?: McpServerConfig,
 ): Promise<void> => {
-  const inputIds = config ? listRequiredInputIdsForServer(config) : []
-  for (const key of mcpKnownSecretKeys(serverId, inputIds)) {
+  if (config && getMcpAuthMode(config) !== 'oauth') {
+    return
+  }
+  for (const key of mcpKnownSecretKeys(serverId)) {
     await deleteSecret(key)
   }
 }

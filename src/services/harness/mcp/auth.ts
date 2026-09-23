@@ -2,6 +2,8 @@ import { UnauthorizedError } from '@ai-sdk/mcp'
 import type { McpAuthKind } from '@/services/mcp/mcp-auth-gate'
 import isDcrMissingClientError from '@/services/mcp/oauth/is-dcr-missing-client'
 
+type McpAuthMode = 'none' | 'headers' | 'oauth'
+
 export const mcpAuthErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message
@@ -29,13 +31,19 @@ export const isMcpAuthError = (error: unknown): boolean => {
   )
 }
 
-export const mcpAuthKindForError = (error: unknown): McpAuthKind => {
+export const mcpAuthKindForError = (
+  error: unknown,
+  authMode?: McpAuthMode,
+): McpAuthKind => {
   const message = mcpAuthErrorMessage(error).toLowerCase()
   if (message.includes('inputs') || message.includes('auth_required:inputs')) {
     return 'inputs'
   }
   if (isDcrMissingClientError(error)) {
     return 'client'
+  }
+  if (authMode === 'headers') {
+    return 'inputs'
   }
   return 'oauth'
 }

@@ -1,6 +1,12 @@
 const originOf = (value: string | URL): string => {
-  const url = typeof value === 'string' ? new URL(value) : value
-  return url.origin
+  if (value instanceof URL) {
+    return value.origin
+  }
+  try {
+    return new URL(value).origin
+  } catch {
+    return value
+  }
 }
 
 export default originOf

@@ -107,6 +107,29 @@ describe('createRefreshOrStartServer', () => {
   })
 })
 
+describe('createStartServer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    serverStates.value = {}
+  })
+
+  it('patches auth_required:inputs without a failure toast', async () => {
+    start.mockRejectedValueOnce(new Error('auth_required:inputs'))
+    const startServer = createStartServer(() => undefined, () => ({}))
+
+    await startServer('github', serverConfig)
+
+    expect(serverStates.value[connectionKey(undefined, 'github')]).toEqual({
+      serverId: 'github',
+      status: 'auth_required',
+      tools: [],
+      error: 'auth_required:inputs',
+    })
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+})
+
 describe('refreshServer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -139,6 +162,20 @@ describe('refreshServer', () => {
       tools: [],
       error: 'tools/list timed out',
     })
+  })
+
+  it('patches auth_required:inputs without a failure toast', async () => {
+    refresh.mockRejectedValueOnce(new Error('auth_required:inputs'))
+
+    await refreshServer('github', serverConfig)
+
+    expect(serverStates.value[connectionKey(undefined, 'github')]).toEqual({
+      serverId: 'github',
+      status: 'auth_required',
+      tools: [],
+      error: 'auth_required:inputs',
+    })
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })
 

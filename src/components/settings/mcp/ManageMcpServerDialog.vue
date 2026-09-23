@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn/ui/tooltip'
 import SettingsInputPasswordInput from '@/components/settings/input/PasswordInput.vue'
+import ManageMcpHttpAuthFields from '@/components/settings/mcp/ManageMcpHttpAuthFields.vue'
 import type {
   McpConfig,
   McpInputDefinition,
@@ -51,8 +52,14 @@ const {
   url,
   envRows,
   headerRows,
+  authMode,
   oauthClientId,
   asAllowlistText,
+  oauthClientSecret,
+  oauthClientSecretConfigured,
+  oauthScopesText,
+  oauthCallbackPort,
+  oauthAuthServerMetadataUrl,
   addEnvRow,
   addHeaderRow,
   handleSave,
@@ -171,86 +178,18 @@ const {
               placeholder="https://example.com/mcp"
             />
           </div>
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <div>
-                <Label>Secrets (headers)</Label>
-                <p class="text-xs text-muted-foreground">
-                  Header name and value. Enter the secret once; it is stored in the keychain.
-                </p>
-              </div>
-              <Tooltip>
-                <TooltipTrigger as-child>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="h-8 w-8"
-                    aria-label="Add header"
-                    @click="addHeaderRow"
-                  >
-                    <Plus class="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Add header</TooltipContent>
-              </Tooltip>
-            </div>
-            <div
-              v-for="(row, index) in headerRows"
-              :key="`header-${index}`"
-              class="space-y-2 rounded-md border border-border/50 p-3"
-            >
-              <div class="flex items-center gap-2">
-                <Input
-                  v-model="row.key"
-                  class="flex-1"
-                  placeholder="Authorization"
-                />
-                <Badge
-                  v-if="row.configured && !row.value.trim()"
-                  variant="outline"
-                >
-                  Saved
-                </Badge>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  @click="headerRows = headerRows.filter((_, i) => i !== index)"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </Button>
-              </div>
-              <SettingsInputPasswordInput
-                v-model="row.value"
-                :placeholder="
-                  row.configured
-                    ? 'Leave blank to keep saved value'
-                    : 'Paste secret'
-                "
-              />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <Label>OAuth client ID (optional)</Label>
-            <Input
-              v-model="oauthClientId"
-              placeholder="Leave blank for dynamic registration"
-            />
-          </div>
-          <div class="space-y-2">
-            <Label>Allowed authorization servers (optional)</Label>
-            <p class="text-xs text-muted-foreground">
-              One origin URL per line. If empty, you confirm the server on first login.
-            </p>
-            <textarea
-              v-model="asAllowlistText"
-              class="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
-              placeholder="https://auth.example.com"
-            />
-          </div>
+          <ManageMcpHttpAuthFields
+            v-model:auth-mode="authMode"
+            v-model:header-rows="headerRows"
+            v-model:oauth-client-id="oauthClientId"
+            v-model:as-allowlist-text="asAllowlistText"
+            v-model:oauth-client-secret="oauthClientSecret"
+            v-model:oauth-scopes-text="oauthScopesText"
+            v-model:oauth-callback-port="oauthCallbackPort"
+            v-model:oauth-auth-server-metadata-url="oauthAuthServerMetadataUrl"
+            :oauth-client-secret-configured="oauthClientSecretConfigured"
+            @add-header="addHeaderRow"
+          />
         </template>
       </div>
 

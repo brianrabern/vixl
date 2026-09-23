@@ -6,11 +6,17 @@ export const openExternalUrl = (
   allowedOrigin: string,
 ): Promise<void> => call('open_external_url', { url, allowedOrigin })
 
-export const oauthBeginLoopback = (flowId: string): Promise<OAuthLoopbackStart> =>
-  call('oauth_begin_loopback', { flowId })
+export const oauthBeginLoopback = (
+  flowId: string,
+  port?: number,
+): Promise<OAuthLoopbackStart> =>
+  call('oauth_begin_loopback', { flowId, port: port ?? null })
 
 export const oauthCancelLoopback = (flowId: string): Promise<void> =>
   call('oauth_cancel_loopback', { flowId })
+
+export const getEnvVars = (names: string[]): Promise<Record<string, string>> =>
+  call('get_env_vars', { names })
 
 export const mcpStart = (
   serverId: string,
@@ -18,8 +24,16 @@ export const mcpStart = (
   args: string[],
   env?: Record<string, string>,
   scopeKey?: string,
+  envFile?: string,
 ): Promise<McpServerState> =>
-  call('mcp_start', { serverId, command, args, env: env ?? null, scopeKey: scopeKey ?? null })
+  call('mcp_start', {
+    serverId,
+    command,
+    args,
+    env: env ?? null,
+    scopeKey: scopeKey ?? null,
+    envFile: envFile ?? null,
+  })
 
 export const mcpStop = (serverId: string, scopeKey?: string): Promise<void> =>
   call('mcp_stop', { serverId, scopeKey: scopeKey ?? null })

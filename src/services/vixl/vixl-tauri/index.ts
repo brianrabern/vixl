@@ -104,6 +104,7 @@ export {
   openExternalUrl,
   oauthBeginLoopback,
   oauthCancelLoopback,
+  getEnvVars,
   mcpStart,
   mcpStop,
   mcpRefresh,

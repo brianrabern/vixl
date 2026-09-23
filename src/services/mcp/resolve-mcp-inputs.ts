@@ -2,13 +2,15 @@ import type { McpConfig, McpInputDefinition, McpServerConfig } from '@/types/vix
 import { isMcpHttpServer, isMcpStdioServer } from '@/types/vixl/mcp-config'
 import { mcpInputKey } from '@/services/mcp/mcp-keychain-keys'
 import {
-  collectRecordInputIds,
+  collectMcpTemplateEnvNames,
   collectMcpTemplateInputIds,
+  collectRecordEnvNames,
+  collectRecordInputIds,
   substituteMcpRecord,
   substituteMcpTemplate,
   type McpTemplateContext,
 } from '@/services/mcp/substitute-mcp-templates'
-import { deleteSecret, getSecret, setSecret } from '@/services/vixl/vixl-tauri'
+import { deleteSecret, getEnvVars, getSecret, setSecret } from '@/services/vixl/vixl-tauri'
 
 export type MissingMcpInput = McpInputDefinition & {
   serverId: string
@@ -34,15 +36,48 @@ export const listRequiredInputIdsForServer = (
 ): string[] => {
   const ids: string[] = []
   if (isMcpStdioServer(serverConfig)) {
+    ids.push(...collectMcpTemplateInputIds(serverConfig.command))
     ids.push(...collectRecordInputIds(serverConfig.env))
     for (const arg of serverConfig.args ?? []) {
       ids.push(...collectMcpTemplateInputIds(arg))
     }
   }
   if (isMcpHttpServer(serverConfig)) {
+    ids.push(...collectMcpTemplateInputIds(serverConfig.url))
     ids.push(...collectRecordInputIds(serverConfig.headers))
+    if (serverConfig.oauth?.clientSecret) {
+      ids.push(...collectMcpTemplateInputIds(serverConfig.oauth.clientSecret))
+    }
   }
   return [...new Set(ids)]
+}
+
+export const listReferencedEnvNamesForServer = (
+  serverConfig: McpServerConfig,
+): string[] => {
+  const names: string[] = []
+  if (isMcpStdioServer(serverConfig)) {
+    names.push(...collectMcpTemplateEnvNames(serverConfig.command))
+    names.push(...collectRecordEnvNames(serverConfig.env))
+    for (const arg of serverConfig.args ?? []) {
+      names.push(...collectMcpTemplateEnvNames(arg))
+    }
+  }
+  if (isMcpHttpServer(serverConfig)) {
+    names.push(...collectMcpTemplateEnvNames(serverConfig.url))
+    names.push(...collectRecordEnvNames(serverConfig.headers))
+  }
+  return [...new Set(names)]
+}
+
+export const resolveMcpTemplateEnv = async (
+  serverConfig: McpServerConfig,
+): Promise<Record<string, string>> => {
+  const names = listReferencedEnvNamesForServer(serverConfig)
+  if (names.length === 0) {
+    return {}
+  }
+  return getEnvVars(names)
 }
 
 export const loadMcpInputValues = async (
@@ -60,6 +95,25 @@ export const loadMcpInputValues = async (
     values[inputId] = stored
   }
   return { values, missing }
+}
+
+export const resolveOAuthClientSecret = async (
+  serverId: string,
+  serverConfig: McpServerConfig,
+): Promise<string | undefined> => {
+  if (!isMcpHttpServer(serverConfig) || !serverConfig.oauth?.clientSecret) {
+    return undefined
+  }
+
+  const template = serverConfig.oauth.clientSecret
+  const inputIds = collectMcpTemplateInputIds(template)
+  const { values, missing } = await loadMcpInputValues(serverId, inputIds)
+  if (missing.length > 0) {
+    throw new Error(`Missing MCP inputs: ${missing.join(', ')}`)
+  }
+
+  const resolved = substituteMcpTemplate(template, { inputs: values, env: {} }).trim()
+  return resolved.length > 0 ? resolved : undefined
 }
 
 export const saveMcpInputValues = async (
@@ -98,6 +152,8 @@ export const resolveServerTemplates = async (
   serverConfig: McpServerConfig,
   env: Record<string, string> = {},
 ): Promise<{
+  url?: string
+  command?: string
   headers?: Record<string, string>
   args?: string[]
   serverEnv?: Record<string, string>
@@ -112,11 +168,13 @@ export const resolveServerTemplates = async (
 
   if (isMcpHttpServer(serverConfig)) {
     return {
+      url: substituteMcpTemplate(serverConfig.url, context),
       headers: substituteMcpRecord(serverConfig.headers, context),
     }
   }
 
   return {
+    command: substituteMcpTemplate(serverConfig.command, context),
     args: (serverConfig.args ?? []).map((arg) => substituteMcpTemplate(arg, context)),
     serverEnv: substituteMcpRecord(serverConfig.env, context),
   }

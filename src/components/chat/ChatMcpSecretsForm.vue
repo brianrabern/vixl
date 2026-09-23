@@ -6,7 +6,7 @@ import { Label } from '@/components/shadcn/ui/label'
 import { Badge } from '@/components/shadcn/ui/badge'
 import SettingsInputPasswordInput from '@/components/settings/input/PasswordInput.vue'
 import type { McpConfig, McpInputDefinition, McpServerConfig } from '@/types/vixl/mcp-config'
-import { isMcpHttpServer } from '@/types/vixl/mcp-config'
+import { getMcpAuthMode } from '@/types/vixl/mcp-config'
 import {
   clearMcpInputValues,
   listRequiredInputIdsForServer,
@@ -50,7 +50,7 @@ const inputDefs = computed((): McpInputDefinition[] => {
   })
 })
 
-const isHttp = computed(() => isMcpHttpServer(props.serverConfig))
+const isOAuth = computed(() => getMcpAuthMode(props.serverConfig) === 'oauth')
 
 const refreshConfigured = async (): Promise<void> => {
   const ids = inputDefs.value.map((item) => item.id)
@@ -198,7 +198,7 @@ defineExpose({ hasMissing, refreshConfigured })
     </div>
 
     <div
-      v-if="showOAuthActions && isHttp"
+      v-if="showOAuthActions && isOAuth"
       class="flex flex-wrap gap-2"
     >
       <Button

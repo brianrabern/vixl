@@ -10,11 +10,16 @@ export type McpStdioServer = {
 export type McpOAuthConfig = {
   clientId?: string
   allowedAuthorizationServers?: string[]
+  clientSecret?: string
+  scopes?: string[]
+  callbackPort?: number
+  authServerMetadataUrl?: string
 }
 
 export type McpHttpServer = {
   type: 'http' | 'sse'
   url: string
+  auth?: 'none' | 'headers' | 'oauth'
   headers?: Record<string, string>
   oauth?: McpOAuthConfig
   enabled?: boolean
@@ -55,3 +60,41 @@ export const isMcpStdioServer = (
 export const isMcpHttpServer = (
   config: McpServerConfig,
 ): config is McpHttpServer => 'type' in config && (config.type === 'http' || config.type === 'sse')
+
+export const getMcpAuthMode = (
+  config: McpServerConfig,
+): 'none' | 'headers' | 'oauth' => {
+  if (!isMcpHttpServer(config)) {
+    return 'none'
+  }
+  if (config.auth !== undefined) {
+    return config.auth
+  }
+  if (config.oauth !== undefined) {
+    return 'oauth'
+  }
+  if (config.headers !== undefined && Object.keys(config.headers).length > 0) {
+    return 'headers'
+  }
+  return 'oauth'
+}
+
+export const canOfferMcpOAuthLogin = (config: McpServerConfig): boolean => {
+  if (!isMcpHttpServer(config)) {
+    return false
+  }
+  const mode = getMcpAuthMode(config)
+  return mode === 'oauth' || mode === 'none'
+}
+
+export const isMcpAuthRequiredInputsError = (error?: string | null): boolean =>
+  typeof error === 'string' && error.includes('auth_required:inputs')
+
+export const canShowMcpOAuthLoginControl = (
+  config: McpServerConfig,
+  status: string,
+  error?: string | null,
+): boolean =>
+  status === 'auth_required' &&
+  canOfferMcpOAuthLogin(config) &&
+  !isMcpAuthRequiredInputsError(error)

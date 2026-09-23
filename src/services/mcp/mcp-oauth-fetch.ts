@@ -2,6 +2,22 @@ import proxyFetch from '@/services/providers/proxy-fetch'
 import parseWwwAuthenticate from '@/services/mcp/oauth/parse-www-authenticate'
 import { recordLastOAuthChallenge } from '@/services/mcp/oauth/last-challenge'
 
+const requestUrlOf = (input: RequestInfo | URL): string =>
+  typeof input === 'string'
+    ? input
+    : input instanceof URL
+      ? input.toString()
+      : input.url
+
+const isAuthorizationServerMetadataPath = (pathname: string): boolean =>
+  pathname.includes('/.well-known/oauth-authorization-server') ||
+  pathname.includes('/.well-known/openid-configuration')
+
+type McpOAuthFetchFn = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>
+
 /**
  * Hardened fetch for OAuth discovery / token / DCR.
  * Blocks redirects and private / link-local / metadata targets.
@@ -12,12 +28,7 @@ export const mcpOAuthFetch = async (
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> => {
-  const url =
-    typeof input === 'string'
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url
+  const url = requestUrlOf(input)
 
   let parsed: URL
   try {
@@ -58,6 +69,27 @@ export const mcpOAuthFetch = async (
   }
 
   return response
+}
+
+export const withAuthServerMetadataUrl = (
+  fetchFn: McpOAuthFetchFn,
+  authServerMetadataUrl?: string,
+): McpOAuthFetchFn => {
+  if (!authServerMetadataUrl) {
+    return fetchFn
+  }
+  return async (input, init) => {
+    let parsed: URL
+    try {
+      parsed = new URL(requestUrlOf(input))
+    } catch {
+      return fetchFn(input, init)
+    }
+    if (isAuthorizationServerMetadataPath(parsed.pathname)) {
+      return fetchFn(authServerMetadataUrl, init)
+    }
+    return fetchFn(input, init)
+  }
 }
 
 const isBlockedOAuthHost = (host: string): boolean => {

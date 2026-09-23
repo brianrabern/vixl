@@ -54,7 +54,7 @@ pub use lsp::{
 };
 pub use lsp_install::{lsp_install_server, lsp_prefetch_defaults};
 pub use mcp::{
-    mcp_call_tool, mcp_list_statuses, mcp_logout, mcp_refresh, mcp_start,
+    get_env_vars, mcp_call_tool, mcp_list_statuses, mcp_logout, mcp_refresh, mcp_start,
     mcp_status, mcp_stop,
 };
 pub use oauth::{

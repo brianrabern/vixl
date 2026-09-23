@@ -15,6 +15,7 @@ import {
 import resolveTrustedMcpServer from '@/services/harness/mcp/resolve-trusted-server'
 import toPermCtx from '@/services/harness/shared/to-perm-ctx'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
+import { getMcpAuthMode } from '@/types/vixl/mcp-config'
 
 const callMcpTool = (ctx: HarnessToolContext) =>
   tool({
@@ -112,7 +113,7 @@ const callMcpTool = (ctx: HarnessToolContext) =>
           throw error
         }
 
-        const kind = mcpAuthKindForError(error)
+        const kind = mcpAuthKindForError(error, getMcpAuthMode(trust.config))
         const resolution = await requestMcpAuth({
           chatId: ctx.chatId,
           toolCallId,

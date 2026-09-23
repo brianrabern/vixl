@@ -27,18 +27,23 @@ pub async fn oauth_begin_loopback(
     app: AppHandle,
     state: State<'_, OAuthLoopbackState>,
     flow_id: String,
+    port: Option<u16>,
 ) -> Result<OAuthLoopbackStart, String> {
     let flow_id = require_flow_id(&flow_id)?;
     state.cancel_flow(&flow_id).await;
 
-    let listener = TcpListener::bind("127.0.0.1:0")
+    let bind_addr = match port {
+        Some(chosen) if chosen > 0 => format!("127.0.0.1:{chosen}"),
+        _ => "127.0.0.1:0".to_string(),
+    };
+    let listener = TcpListener::bind(&bind_addr)
         .await
         .map_err(|error| format!("Failed to bind OAuth loopback: {error}"))?;
-    let port = listener
+    let bound_port = listener
         .local_addr()
         .map_err(|error| format!("Failed to read OAuth loopback port: {error}"))?
         .port();
-    let redirect_url = format!("http://127.0.0.1:{port}/callback");
+    let redirect_url = format!("http://127.0.0.1:{bound_port}/callback");
 
     let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
     let flow_id_for_task = flow_id.clone();
@@ -68,7 +73,7 @@ pub async fn oauth_begin_loopback(
         let _ = stream.write_all(response.as_bytes()).await;
         let _ = stream.shutdown().await;
 
-        let payload = match parse_callback_request(&request, port) {
+        let payload = match parse_callback_request(&request, bound_port) {
             Ok(parsed) => parsed.with_flow_id(flow_id_for_task.clone()),
             Err(message) => OAuthCallbackPayload::protocol_error(message, flow_id_for_task.clone()),
         };
@@ -87,7 +92,10 @@ pub async fn oauth_begin_loopback(
         },
     )?;
 
-    Ok(OAuthLoopbackStart { port, redirect_url })
+    Ok(OAuthLoopbackStart {
+        port: bound_port,
+        redirect_url,
+    })
 }
 
 #[tauri::command]

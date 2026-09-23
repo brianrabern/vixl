@@ -17,6 +17,17 @@ export const collectMcpTemplateInputIds = (value: string): string[] => {
   return ids
 }
 
+export const collectMcpTemplateEnvNames = (value: string): string[] => {
+  const names: string[] = []
+  for (const match of value.matchAll(ENV_PATTERN)) {
+    const name = match[1]?.trim()
+    if (name) {
+      names.push(name)
+    }
+  }
+  return names
+}
+
 export const substituteMcpTemplate = (
   value: string,
   context: McpTemplateContext,
@@ -65,4 +76,17 @@ export const collectRecordInputIds = (
     ids.push(...collectMcpTemplateInputIds(value))
   }
   return [...new Set(ids)]
+}
+
+export const collectRecordEnvNames = (
+  record: Record<string, string> | undefined,
+): string[] => {
+  if (!record) {
+    return []
+  }
+  const names: string[] = []
+  for (const value of Object.values(record)) {
+    names.push(...collectMcpTemplateEnvNames(value))
+  }
+  return [...new Set(names)]
 }

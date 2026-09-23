@@ -41,7 +41,7 @@ import useMcpServers from '@/composables/use-mcp-servers'
 import useMcpTrustChoice from '@/composables/mcp-servers/use-mcp-trust-choice'
 import type { SettingsTab } from '@/composables/use-vixl-config'
 import type { McpConfig, McpInputDefinition, McpServerConfig } from '@/types/vixl/mcp-config'
-import { isMcpHttpServer } from '@/types/vixl/mcp-config'
+import { canShowMcpOAuthLoginControl, getMcpAuthMode } from '@/types/vixl/mcp-config'
 import { isMcpServerEnabled } from '@/schemas/mcp-config'
 import {
   listRequiredInputIdsForServer,
@@ -121,8 +121,8 @@ const toggleExpanded = (id: string): void => {
   expanded.value[id] = !expanded.value[id]
 }
 
-const isAuthCapableServer = (serverConfig: McpServerConfig): boolean =>
-  isMcpHttpServer(serverConfig)
+const isOAuthServer = (serverConfig: McpServerConfig): boolean =>
+  getMcpAuthMode(serverConfig) === 'oauth'
 
 const stateFor = (id: string) =>
   serverStates.value[connectionKey(connectionScope.value, id)]
@@ -158,10 +158,10 @@ const isServerRunning = (id: string, serverConfig: McpServerConfig): boolean =>
 
 const showAuthControl = (serverConfig: McpServerConfig, id: string): boolean => {
   const status = serverStatus(id)
-  if (status === 'auth_required') {
+  if (canShowMcpOAuthLoginControl(serverConfig, status, stateFor(id)?.error)) {
     return true
   }
-  if (isAuthCapableServer(serverConfig) && status === 'connected') {
+  if (status === 'connected' && isOAuthServer(serverConfig)) {
     return true
   }
   return false
@@ -447,10 +447,19 @@ const refreshAll = async (): Promise<void> => {
             Secrets configured
           </Badge>
           <Badge
-            v-if="serverStatus(server.id) === 'connected' && isAuthCapableServer(server.config)"
+            v-if="serverStatus(server.id) === 'connected' && isOAuthServer(server.config)"
             variant="outline"
           >
             OAuth connected
+          </Badge>
+          <Badge
+            v-else-if="
+              serverStatus(server.id) === 'connected' &&
+              getMcpAuthMode(server.config) === 'headers'
+            "
+            variant="outline"
+          >
+            Connected
           </Badge>
           <div class="ml-auto flex items-center gap-0.5">
             <Tooltip>
@@ -614,7 +623,7 @@ const refreshAll = async (): Promise<void> => {
           :server-id="secretsServerId"
           :server-config="secretsServerConfig"
           :mcp-config="scopedMcpConfig"
-          :show-oauth-actions="isAuthCapableServer(secretsServerConfig)"
+          :show-oauth-actions="isOAuthServer(secretsServerConfig)"
           :oauth-status="serverStatus(secretsServerId)"
           @saved="refreshSecretsBadges"
           @sign-in="

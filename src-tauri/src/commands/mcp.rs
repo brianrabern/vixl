@@ -8,7 +8,7 @@ mod status;
 mod types;
 
 pub use allowlist::validate_mcp_spawn;
-pub use env::validate_mcp_env;
+pub use env::{get_env_vars, validate_mcp_env};
 pub use resolve_cmd::resolve_command;
 pub(crate) use resolve_cmd::{apply_resolved_path_env, merged_shell_path};
 pub use spawn::{mcp_start, mcp_stop};

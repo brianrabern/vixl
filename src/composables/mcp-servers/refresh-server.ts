@@ -27,13 +27,16 @@ const refreshServer = async (
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error'
-      toast.error('Refresh failed', {
-        description: message,
-      })
+      const authRequired = message.startsWith('auth_required')
+      if (!authRequired) {
+        toast.error('Refresh failed', {
+          description: message,
+        })
+      }
       const notRunning = message.includes('Server not running')
       patchServerState(serverId, {
         serverId,
-        status: notRunning ? 'stopped' : 'error',
+        status: authRequired ? 'auth_required' : notRunning ? 'stopped' : 'error',
         tools: [],
         error: message,
       }, options?.scopeKey)

@@ -11,20 +11,59 @@ const stdioServerSchema = z.object({
   enabled: z.boolean().optional(),
 })
 
+const INPUT_TEMPLATE = /^\$\{input:([^}]+)\}$/
+
+const withMcpTemplatePlaceholders = (value: string): string =>
+  value.replace(/\$\{input:([^}]+)\}/g, 'x').replace(/\$\{env:([^}]+)\}/g, 'x')
+
+export const isMcpTemplatableUrl = (value: string): boolean =>
+  z.string().url().safeParse(withMcpTemplatePlaceholders(value)).success
+
+const templatableUrl = z.string().refine(isMcpTemplatableUrl, {
+  message: 'must be a valid URL after replacing ${input:...} and ${env:...} templates',
+})
+
 const oauthSchema = z
   .object({
     clientId: z.string().min(1).optional(),
     allowedAuthorizationServers: z.array(z.string().url()).optional(),
+    clientSecret: z
+      .string()
+      .regex(INPUT_TEMPLATE, 'clientSecret must be a ${input:...} template')
+      .optional(),
+    scopes: z.array(z.string()).optional(),
+    callbackPort: z.number().int().positive().optional(),
+    authServerMetadataUrl: z.string().url().optional(),
   })
   .strict()
 
-const httpServerSchema = z.object({
-  type: z.enum(['http', 'sse']),
-  url: z.string().url(),
-  headers: z.record(z.string()).optional(),
-  oauth: oauthSchema.optional(),
-  enabled: z.boolean().optional(),
-})
+const httpServerSchema = z
+  .object({
+    type: z.enum(['http', 'sse']),
+    url: templatableUrl,
+    auth: z.enum(['none', 'headers', 'oauth']).optional(),
+    headers: z.record(z.string()).optional(),
+    oauth: oauthSchema.optional(),
+    enabled: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.auth === 'none' && value.oauth !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'auth none cannot include an oauth block',
+        path: ['oauth'],
+      })
+    }
+
+    const headerKeys = value.headers ? Object.keys(value.headers) : []
+    if (value.auth === 'headers' && headerKeys.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'auth headers requires a non-empty headers object',
+        path: ['headers'],
+      })
+    }
+  })
 
 const serverSchema = z.union([stdioServerSchema, httpServerSchema])
 

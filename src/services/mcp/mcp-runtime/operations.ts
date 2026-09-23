@@ -1,163 +1,28 @@
-import { auth } from '@ai-sdk/mcp'
-import type { McpHttpServer, McpServerConfig } from '@/types/vixl/mcp-config'
-import { isMcpHttpServer } from '@/types/vixl/mcp-config'
+import type { McpServerConfig } from '@/types/vixl/mcp-config'
+import { getMcpAuthMode, isMcpHttpServer } from '@/types/vixl/mcp-config'
 import {
   getHttpPrompt,
   getHttpState,
   hasHttpServer,
   listHttpResources,
   listHttpStates,
-  markHttpAuthRequired,
   readHttpResource,
-  getHttpOauthChallenge,
-  setHttpLastRequestedScope,
 } from '@/services/mcp/mcp-http-client'
-import { mcpOAuthFetch } from '@/services/mcp/mcp-oauth-fetch'
 import {
   mcpCallTool,
   mcpListStatuses,
   mcpStatus,
-  oauthBeginLoopback,
-  oauthCancelLoopback,
-  openExternalUrl,
   type McpServerState,
 } from '@/services/vixl/vixl-tauri'
-import { applyOAuthCallback, getLastOAuthChallenge } from '@/services/mcp/oauth'
 import connectionKey from '@/services/mcp/connection-key'
-import { assertServerTrusted } from './trust'
-import { createTokenProvider, waitForOAuthCallback } from './oauth'
-import { start, startHttp } from './lifecycle'
+import { start } from './lifecycle'
 import type { McpRuntimeOptions } from './types'
 import callHttpToolWithStepUp from './step-up'
+import { runAuthenticateHttp } from './authenticate-http'
+
+export { cancelAuthenticate } from './authenticate-http'
 
 const oauthInFlight = new Map<string, Promise<McpServerState>>()
-const oauthAbortControllers = new Map<string, AbortController>()
-
-const isOAuthCallbackAborted = (error: unknown): boolean =>
-  error instanceof Error && error.message === 'OAuth callback aborted'
-
-const runAuthenticateHttp = async (
-  serverId: string,
-  config: McpHttpServer,
-  options?: McpRuntimeOptions,
-): Promise<McpServerState> => {
-  assertServerTrusted(serverId, config, options)
-
-  const scopeKey = options?.scopeKey
-  const flowId = connectionKey(scopeKey, serverId)
-  const loopback = await oauthBeginLoopback(flowId)
-  const abort = new AbortController()
-  oauthAbortControllers.set(flowId, abort)
-  const callbackPromise = waitForOAuthCallback(abort.signal, flowId)
-
-  let result: McpServerState | undefined
-  let failure: unknown
-
-  try {
-    const provider = createTokenProvider(
-      serverId,
-      config,
-      loopback.redirectUrl,
-      async (url: string, allowedOrigin: string) => {
-        await openExternalUrl(url, allowedOrigin)
-      },
-      options?.confirmAuthorizationServerOrigin,
-    )
-
-    const challenge =
-      getHttpOauthChallenge(serverId, scopeKey) ?? getLastOAuthChallenge(config.url)
-    const scope = options?.scope ?? challenge?.scope
-    const resourceMetadataUrl =
-      options?.resourceMetadataUrl ?? challenge?.resourceMetadataUrl
-    if (scope) {
-      setHttpLastRequestedScope(serverId, scope, scopeKey)
-    }
-
-    const authBase = {
-      serverUrl: config.url,
-      fetchFn: mcpOAuthFetch,
-      scope,
-      resourceMetadataUrl,
-    }
-
-    const first = await auth(provider, authBase)
-    if (first === 'REDIRECT') {
-      const callback = await callbackPromise
-      const exchange = await applyOAuthCallback(provider, callback)
-      const second = await auth(provider, {
-        ...authBase,
-        authorizationCode: exchange.authorizationCode,
-        callbackState: exchange.callbackState,
-        callbackIssuer: exchange.callbackIssuer,
-      })
-      if (second !== 'AUTHORIZED') {
-        throw new Error('OAuth authorization did not complete')
-      }
-    } else if (first !== 'AUTHORIZED') {
-      throw new Error('OAuth authorization did not complete')
-    } else {
-      abort.abort()
-      try {
-        await callbackPromise
-      } catch (callbackError) {
-        if (!isOAuthCallbackAborted(callbackError)) {
-          throw callbackError
-        }
-      }
-    }
-
-    result = await startHttp(serverId, config, options, provider)
-  } catch (error) {
-    abort.abort()
-    try {
-      await callbackPromise
-    } catch (callbackError) {
-      if (!isOAuthCallbackAborted(callbackError)) {
-        failure = callbackError
-      }
-    }
-    if (failure === undefined) {
-      markHttpAuthRequired(
-        serverId,
-        config,
-        error instanceof Error ? error.message : 'Authentication failed',
-        options?.scopeKey,
-      )
-      failure = error
-    }
-  } finally {
-    oauthAbortControllers.delete(flowId)
-    try {
-      await oauthCancelLoopback(flowId)
-    } catch (cancelError) {
-      if (!(cancelError instanceof Error) && failure === undefined) {
-        failure = cancelError
-      }
-    }
-  }
-
-  if (failure !== undefined) {
-    throw failure
-  }
-
-  if (result === undefined) {
-    throw new Error('OAuth authorization did not complete')
-  }
-
-  return result
-}
-
-export const cancelAuthenticate = (
-  serverId: string,
-  scopeKey?: string | null,
-): boolean => {
-  const controller = oauthAbortControllers.get(connectionKey(scopeKey, serverId))
-  if (!controller) {
-    return false
-  }
-  controller.abort()
-  return true
-}
 
 export const authenticate = async (
   serverId: string,
@@ -165,6 +30,11 @@ export const authenticate = async (
   options?: McpRuntimeOptions,
 ): Promise<McpServerState> => {
   if (!isMcpHttpServer(config)) {
+    return start(serverId, config, options)
+  }
+
+  const authMode = getMcpAuthMode(config)
+  if (authMode === 'headers') {
     return start(serverId, config, options)
   }
 

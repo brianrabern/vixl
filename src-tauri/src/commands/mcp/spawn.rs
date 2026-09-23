@@ -9,7 +9,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 
 use super::allowlist::validate_mcp_spawn;
-use super::env::validate_mcp_env;
+use super::env::{merge_mcp_env_file, validate_mcp_env};
 use super::resolve_cmd::{apply_resolved_path_env, resolve_command};
 use super::rpc::{json_rpc, json_rpc_notify, list_tools_internal, spawn_reader};
 use super::types::{
@@ -17,6 +17,7 @@ use super::types::{
 };
 use crate::commands::codegraph::{codegraph_store_env_vars, prepare_codegraph_store};
 use crate::commands::fs::canonical_project_root;
+use crate::commands::paths::user_vixl_dir;
 
 #[tauri::command]
 pub async fn mcp_start(
@@ -26,9 +27,16 @@ pub async fn mcp_start(
     args: Vec<String>,
     env: Option<HashMap<String, String>>,
     scope_key: Option<String>,
+    env_file: Option<String>,
 ) -> Result<McpServerState, String> {
     validate_mcp_spawn(&command, &args)?;
-    let env_overlay = env.unwrap_or_default();
+    let personal_dir = user_vixl_dir(&app)?;
+    let env_overlay = merge_mcp_env_file(
+        env_file.as_deref(),
+        scope_key.as_deref(),
+        &personal_dir,
+        env.unwrap_or_default(),
+    )?;
     validate_mcp_env(&env_overlay)?;
     let program = resolve_command(&app, command.trim()).await?;
     let resolved_scope = scope_key.as_deref().unwrap_or("personal").to_string();
