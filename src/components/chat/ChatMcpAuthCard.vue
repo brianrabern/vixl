@@ -200,7 +200,7 @@ const handleSaveClient = async (): Promise<void> => {
       class="space-y-3"
     >
       <div class="space-y-2">
-        <Label for="mcp-oauth-client-id">OAuth client ID</Label>
+        <Label for="mcp-oauth-client-id">OAuth client ID <span class="text-destructive">*</span></Label>
         <Input
           id="mcp-oauth-client-id"
           v-model="clientIdDraft"
@@ -208,7 +208,7 @@ const handleSaveClient = async (): Promise<void> => {
         />
       </div>
       <div class="space-y-2">
-        <Label for="mcp-oauth-client-secret">Client secret (optional)</Label>
+        <Label for="mcp-oauth-client-secret">Client secret</Label>
         <Input
           id="mcp-oauth-client-secret"
           v-model="clientSecretDraft"

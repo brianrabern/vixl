@@ -74,7 +74,7 @@ const {
     <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-xl">
       <div class="space-y-4">
         <div class="space-y-2">
-          <Label>Server ID</Label>
+          <Label>Server ID <span class="text-destructive">*</span></Label>
           <Input
             v-model="draftId"
             :disabled="mode === 'edit'"
@@ -83,7 +83,7 @@ const {
         </div>
 
         <div class="space-y-2">
-          <Label>Transport</Label>
+          <Label>Transport <span class="text-destructive">*</span></Label>
           <select
             v-model="transport"
             class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
@@ -96,7 +96,7 @@ const {
 
         <template v-if="transport === 'stdio'">
           <div class="space-y-2">
-            <Label>Command</Label>
+            <Label>Command <span class="text-destructive">*</span></Label>
             <Input
               v-model="command"
               placeholder="npx"
@@ -172,7 +172,7 @@ const {
 
         <template v-else>
           <div class="space-y-2">
-            <Label>URL</Label>
+            <Label>URL <span class="text-destructive">*</span></Label>
             <Input
               v-model="url"
               placeholder="https://example.com/mcp"

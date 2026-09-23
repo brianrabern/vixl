@@ -70,7 +70,7 @@ const onSubmit = handleSubmit(async (values) => {
     <form class="space-y-4" @submit="onSubmit">
       <FormField v-slot="{ componentField }" name="name">
         <FormItem>
-          <FormLabel>Name</FormLabel>
+          <FormLabel>Name <span class="text-destructive">*</span></FormLabel>
           <FormControl>
             <Input type="text" placeholder="Skill name" v-bind="componentField" />
           </FormControl>
@@ -80,7 +80,7 @@ const onSubmit = handleSubmit(async (values) => {
 
       <FormField v-slot="{ componentField }" name="description">
         <FormItem>
-          <FormLabel>Description</FormLabel>
+          <FormLabel>Description <span class="text-destructive">*</span></FormLabel>
           <FormControl>
             <Input
               type="text"

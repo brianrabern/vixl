@@ -36,7 +36,7 @@ const emit = defineEmits<{
 <template>
   <div class="space-y-4">
     <div class="space-y-2">
-      <Label>Auth type</Label>
+      <Label>Auth type <span class="text-destructive">*</span></Label>
       <select
         v-model="authMode"
         class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
@@ -52,7 +52,7 @@ const emit = defineEmits<{
       class="space-y-2"
     >
       <div class="flex items-center justify-between gap-2">
-        <Label>Headers</Label>
+        <Label>Headers <span class="text-destructive">*</span></Label>
         <Tooltip>
           <TooltipTrigger as-child>
             <Button
@@ -108,7 +108,7 @@ const emit = defineEmits<{
 
     <template v-if="authMode === 'oauth'">
       <div class="space-y-2">
-        <Label>OAuth client ID (optional)</Label>
+        <Label>OAuth client ID</Label>
         <Input
           v-model="oauthClientId"
           placeholder="Leave blank for dynamic registration"
@@ -116,7 +116,7 @@ const emit = defineEmits<{
       </div>
       <div class="space-y-2">
         <div class="flex items-center gap-2">
-          <Label>Client secret (optional)</Label>
+          <Label>Client secret</Label>
           <Badge
             v-if="oauthClientSecretConfigured && !oauthClientSecret.trim()"
             variant="outline"
@@ -137,7 +137,7 @@ const emit = defineEmits<{
         />
       </div>
       <div class="space-y-2">
-        <Label>Allowed authorization servers (optional)</Label>
+        <Label>Allowed authorization servers</Label>
         <p class="text-xs text-muted-foreground">
           One origin URL per line. If empty, you confirm the server on first login.
         </p>
@@ -148,7 +148,7 @@ const emit = defineEmits<{
         />
       </div>
       <div class="space-y-2">
-        <Label>Scopes (optional)</Label>
+        <Label>Scopes</Label>
         <p class="text-xs text-muted-foreground">
           Comma-separated. Leave blank to use the server default.
         </p>
@@ -158,7 +158,7 @@ const emit = defineEmits<{
         />
       </div>
       <div class="space-y-2">
-        <Label>Callback port (optional)</Label>
+        <Label>Callback port</Label>
         <p class="text-xs text-muted-foreground">
           Leave blank to pick an available port.
         </p>
@@ -169,7 +169,7 @@ const emit = defineEmits<{
         />
       </div>
       <div class="space-y-2">
-        <Label>Authorization server metadata URL (optional)</Label>
+        <Label>Authorization server metadata URL</Label>
         <p class="text-xs text-muted-foreground">
           Leave blank to use the standard discovery URL.
         </p>

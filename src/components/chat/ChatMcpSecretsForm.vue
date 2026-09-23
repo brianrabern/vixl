@@ -156,7 +156,7 @@ defineExpose({ hasMissing, refreshConfigured })
       class="space-y-2"
     >
       <div class="flex items-center gap-2">
-        <Label :for="`mcp-secret-${def.id}`">{{ def.id }}</Label>
+        <Label :for="`mcp-secret-${def.id}`">{{ def.id }} <span class="text-destructive">*</span></Label>
         <Badge
           v-if="configured[def.id] && !clearFlags[def.id]"
           variant="outline"

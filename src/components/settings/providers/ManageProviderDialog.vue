@@ -94,11 +94,11 @@ const {
         <section class="space-y-3">
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="min-w-0 space-y-1.5">
-              <Label for="manage-provider-name">Name</Label>
+              <Label for="manage-provider-name">Name <span class="text-destructive">*</span></Label>
               <Input id="manage-provider-name" v-model="name" placeholder="local" :class="fieldClass" />
             </div>
             <div class="min-w-0 space-y-1.5">
-              <Label for="manage-provider-base-url">Base URL</Label>
+              <Label for="manage-provider-base-url">Base URL <span class="text-destructive">*</span></Label>
               <Input
                 id="manage-provider-base-url"
                 v-model="baseURL"
@@ -114,7 +114,7 @@ const {
           </p>
 
           <div class="min-w-0 space-y-1.5">
-            <Label for="manage-provider-api-key">API key (optional)</Label>
+            <Label for="manage-provider-api-key">API key</Label>
             <SettingsInputPasswordInput
               id="manage-provider-api-key"
               v-model="apiKeyInput"
@@ -313,7 +313,7 @@ const {
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div class="min-w-0 space-y-1.5">
-                <Label :for="`model-id-${index}`">Model ID</Label>
+                <Label :for="`model-id-${index}`">Model ID <span class="text-destructive">*</span></Label>
                 <Input
                   :id="`model-id-${index}`"
                   v-model="model.id"
@@ -326,7 +326,6 @@ const {
                 <Input
                   :id="`model-name-${index}`"
                   v-model="model.name"
-                  placeholder="Optional label"
                   :class="fieldClass"
                 />
               </div>
@@ -336,7 +335,6 @@ const {
                   :id="`model-context-${index}`"
                   v-model="model.contextWindow"
                   inputmode="numeric"
-                  placeholder="Optional"
                   :class="fieldClass"
                 />
               </div>
@@ -437,7 +435,6 @@ const {
                     inputmode="decimal"
                     min="0"
                     step="0.01"
-                    placeholder="Optional"
                     :class="fieldClass"
                   />
                 </div>
@@ -450,7 +447,6 @@ const {
                     inputmode="decimal"
                     min="0"
                     step="0.01"
-                    placeholder="Optional"
                     :class="fieldClass"
                   />
                 </div>
@@ -463,7 +459,6 @@ const {
                     inputmode="decimal"
                     min="0"
                     step="0.01"
-                    placeholder="Optional"
                     :class="fieldClass"
                   />
                 </div>

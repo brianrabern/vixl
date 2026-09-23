@@ -128,7 +128,7 @@ const onSubmit = handleSubmit(async (values) => {
     <form class="space-y-4" @submit="onSubmit">
       <FormField v-slot="{ componentField }" name="title">
         <FormItem>
-          <FormLabel>Title</FormLabel>
+          <FormLabel>Title <span class="text-destructive">*</span></FormLabel>
           <FormControl>
             <Input type="text" placeholder="Plan title" v-bind="componentField" />
           </FormControl>

@@ -97,7 +97,7 @@ const onSubmit = handleSubmit(async (formValues) => {
     <form class="space-y-4" @submit="onSubmit">
       <FormField v-slot="{ componentField }" name="name">
         <FormItem>
-          <FormLabel>Name</FormLabel>
+          <FormLabel>Name <span class="text-destructive">*</span></FormLabel>
           <FormControl>
             <Input type="text" placeholder="Agent name" v-bind="componentField" />
           </FormControl>
@@ -107,7 +107,7 @@ const onSubmit = handleSubmit(async (formValues) => {
 
       <FormField v-slot="{ componentField }" name="description">
         <FormItem>
-          <FormLabel>Description</FormLabel>
+          <FormLabel>Description <span class="text-destructive">*</span></FormLabel>
           <FormControl>
             <Input
               type="text"
@@ -121,7 +121,7 @@ const onSubmit = handleSubmit(async (formValues) => {
 
       <FormField name="model">
         <FormItem>
-          <FormLabel>Model (optional)</FormLabel>
+          <FormLabel>Model</FormLabel>
           <ModelsOptionsModelOptionsRow
             :model-value="values.model ?? ''"
             :disabled="saving"
@@ -136,7 +136,7 @@ const onSubmit = handleSubmit(async (formValues) => {
 
       <FormField name="tools">
         <FormItem>
-          <FormLabel>Tools (optional)</FormLabel>
+          <FormLabel>Tools</FormLabel>
           <FormControl>
             <AgentToolsInput
               :model-value="values.tools ?? []"
