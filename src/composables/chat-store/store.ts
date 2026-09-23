@@ -20,6 +20,7 @@ import {
 } from './helpers'
 import hydrateSessionFromDisk from './hydrate'
 import { bindSessionMutations } from './session-mutations'
+import { clearPendingStreamDeltasForSession } from './stream-delta-buffer'
 import createActiveSessionFacade from './active-session-facade'
 import rekeyChatSession from './rekey'
 import type { SessionMutations } from './types'
@@ -30,6 +31,12 @@ const useChatStore = () => {
   const messages = computed(() => getActiveSession()?.messages.value ?? [])
   const timeline = computed(() => getActiveSession()?.timeline.value ?? [])
   const loading = computed(() => getActiveSession()?.loading.value ?? false)
+  const activeTurnId = computed(
+    () => getActiveSession()?.activeTurnId.value ?? null,
+  )
+  const activeStepId = computed(
+    () => getActiveSession()?.activeStepId.value ?? null,
+  )
   const pendingQuestion = computed(
     () => getActiveSession()?.pendingQuestion.value ?? null,
   )
@@ -60,6 +67,10 @@ const useChatStore = () => {
 
   const dropSession = (projectSlug: string, chatIdValue: string): void => {
     const key = makeSessionKey(projectSlug, chatIdValue)
+    const session = sessions.get(key)
+    if (session) {
+      bindSessionMutations(session).disposePendingStreamDeltas()
+    }
     sessions.delete(key)
     if (activeKey.value === key) {
       activeKey.value = null
@@ -143,6 +154,7 @@ const useChatStore = () => {
   }): Promise<ChatMeta> => {
     const record = await createChat(args)
     const session = getOrCreateSession(record.projectSlug, record.id)
+    clearPendingStreamDeltasForSession(session)
     session.meta.value = mapMeta(record)
     session.messages.value = []
     session.timeline.value = []
@@ -175,6 +187,8 @@ const useChatStore = () => {
     messages,
     timeline,
     loading,
+    activeTurnId,
+    activeStepId,
     chatId,
     pendingQuestion,
     todos,

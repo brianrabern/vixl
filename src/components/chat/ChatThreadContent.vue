@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import type { ChatStatus } from 'ai'
 import type { ChatTimelineItem, SubagentTimelineItem } from '@/types/chat/chat-timeline-item'
 import type { PendingQuestionState } from '@/types/chat/pending-question'
 import type { PendingMcpAuthView } from '@/types/chat/pending-mcp-auth'
 import type { AggregatedTurnFileChange } from '@/types/harness/file-checkpoint'
+import type { ToolRun } from '@/types/harness/tool-run'
 import type { McpConfig } from '@/types/vixl/mcp-config'
 import type { PendingApprovalView } from '@/services/harness/permission/gate'
 import AiElementsShimmerShimmer from '@/components/ai-elements/shimmer/Shimmer.vue'
@@ -28,6 +29,10 @@ import {
   collectMutationsAfterUserMessage,
 } from '@/services/harness/restore-file-checkpoints'
 import deriveAgentActivity from '@/utils/derive-agent-activity'
+import {
+  collectChatTurnOpenLiveIds,
+  provideChatTurnOpenState,
+} from '@/composables/use-chat-turn-open-state'
 
 const props = defineProps<{
   timeline: ChatTimelineItem[]
@@ -52,8 +57,121 @@ const emit = defineEmits<{
   stopSubagent: [subagentId: string]
 }>()
 
+type SubagentMaps = {
+  byToolCallId: Map<string, SubagentTimelineItem>
+  byId: Map<string, SubagentTimelineItem>
+}
+
+type CompletedFileToolMark = {
+  toolCallId: string
+  diffs: NonNullable<ToolRun['diffs']>
+}
+
+type LastTurnRestoreBoundary = {
+  lastTurnIndex: number
+  userMessageId: string
+}
+
+const collectSubagentItems = (timeline: ChatTimelineItem[]): SubagentTimelineItem[] => {
+  const items: SubagentTimelineItem[] = []
+  for (const item of timeline) {
+    if (item.type === 'subagent') {
+      items.push(item)
+    }
+  }
+  return items
+}
+
+const sameSubagentItems = (
+  left: SubagentTimelineItem[],
+  right: SubagentTimelineItem[],
+): boolean => {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
+}
+
+const buildSubagentMaps = (items: SubagentTimelineItem[]): SubagentMaps => {
+  const byToolCallId = new Map<string, SubagentTimelineItem>()
+  const byId = new Map<string, SubagentTimelineItem>()
+  for (const item of items) {
+    byId.set(item.subagentId, item)
+    if (item.toolCallId) {
+      byToolCallId.set(item.toolCallId, item)
+    }
+  }
+  return { byToolCallId, byId }
+}
+
+const collectCompletedFileTools = (
+  timeline: ChatTimelineItem[],
+): CompletedFileToolMark[] => {
+  const marks: CompletedFileToolMark[] = []
+  const takeTools = (tools: ToolRun[]): void => {
+    for (const tool of tools) {
+      if (tool.status === 'done' && tool.diffs && tool.diffs.length > 0) {
+        marks.push({ toolCallId: tool.toolCallId, diffs: tool.diffs })
+      }
+    }
+  }
+  for (const item of timeline) {
+    if (item.type === 'agent-turn') {
+      for (const step of item.turn.steps) {
+        takeTools(step.tools)
+      }
+      continue
+    }
+    if (item.type === 'subagent') {
+      takeTools(item.tools)
+    }
+  }
+  return marks
+}
+
+const sameCompletedFileTools = (
+  left: CompletedFileToolMark[],
+  right: CompletedFileToolMark[],
+): boolean => {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftMark = left[index]
+    const rightMark = right[index]
+    if (
+      leftMark?.toolCallId !== rightMark?.toolCallId ||
+      leftMark?.diffs !== rightMark?.diffs
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 const { scrollToEnd } = useMessageScroller()
-const { handleContentChange } = useMessageScrollerContext()
+const {
+  handleContentChange,
+  itemPlaceholderHeight,
+  setItemIds,
+  setPinnedMessageIds,
+  windowedMessageIds,
+} = useMessageScrollerContext()
+
+const turnOpenState = provideChatTurnOpenState()
+
+watch(
+  () => props.timeline,
+  (timeline) => {
+    turnOpenState.prune(collectChatTurnOpenLiveIds(timeline))
+  },
+  { immediate: true },
+)
 
 const isLive = computed(() => props.status === 'streaming' || props.status === 'submitted')
 
@@ -94,32 +212,32 @@ const activeMcpAuth = computed(() => {
   return queue[0] ?? null
 })
 
-const subagentsByToolCallId = computed(() => {
-  const map = new Map<string, SubagentTimelineItem>()
-  for (const item of props.timeline) {
-    if (item.type === 'subagent' && item.toolCallId) {
-      map.set(item.toolCallId, item)
-    }
-  }
-  return map
-})
-
-const subagentsById = computed(() => {
-  const map = new Map<string, SubagentTimelineItem>()
-  for (const item of props.timeline) {
-    if (item.type === 'subagent') {
-      map.set(item.subagentId, item)
-    }
-  }
-  return map
-})
-
 const subagentRevision = computed(() =>
   props.timeline
     .filter((item): item is SubagentTimelineItem => item.type === 'subagent')
     .map((item) => `${item.subagentId}:${item.status}:${item.summary?.length ?? 0}`)
     .join('|'),
 )
+
+let cachedSubagentItems: SubagentTimelineItem[] = []
+let cachedSubagentMaps: SubagentMaps = {
+  byToolCallId: new Map(),
+  byId: new Map(),
+}
+
+const subagentMaps = computed((): SubagentMaps => {
+  const items = collectSubagentItems(props.timeline)
+  if (sameSubagentItems(items, cachedSubagentItems)) {
+    return cachedSubagentMaps
+  }
+  cachedSubagentItems = items
+  cachedSubagentMaps = buildSubagentMaps(items)
+  return cachedSubagentMaps
+})
+
+const subagentsByToolCallId = computed(() => subagentMaps.value.byToolCallId)
+
+const subagentsById = computed(() => subagentMaps.value.byId)
 
 const streamRevision = computed(() => {
   const last = props.timeline.at(-1)
@@ -247,8 +365,6 @@ const lastVisibleAgentTurnIndex = computed(() => {
   return lastIndex
 })
 
-const chatFileChanges = computed(() => aggregateChatFileDiffs(props.timeline))
-
 const lastAgentTurnIndex = computed(() => {
   for (let index = props.timeline.length - 1; index >= 0; index -= 1) {
     if (props.timeline[index]?.type === 'agent-turn') {
@@ -258,18 +374,77 @@ const lastAgentTurnIndex = computed(() => {
   return -1
 })
 
-const lastTurnRestoreChanges = computed((): AggregatedTurnFileChange[] | undefined => {
+let cachedCompletedFileTools: CompletedFileToolMark[] = []
+let cachedFileToolsForChanges: CompletedFileToolMark[] | null = null
+let cachedChatFileChanges: AggregatedTurnFileChange[] = []
+let cachedRestoreBoundary: LastTurnRestoreBoundary | null = null
+let cachedRestoreFileTools: CompletedFileToolMark[] | null = null
+let cachedLastTurnRestoreChanges: AggregatedTurnFileChange[] | undefined
+let cachedRestoreBoundaryObj: LastTurnRestoreBoundary | null = null
+
+const completedFileTools = computed((): CompletedFileToolMark[] => {
+  const marks = collectCompletedFileTools(props.timeline)
+  if (sameCompletedFileTools(marks, cachedCompletedFileTools)) {
+    return cachedCompletedFileTools
+  }
+  cachedCompletedFileTools = marks
+  return cachedCompletedFileTools
+})
+
+const chatFileChanges = computed(() => {
+  const fileTools = completedFileTools.value
+  if (fileTools === cachedFileToolsForChanges) {
+    return cachedChatFileChanges
+  }
+  const changes = aggregateChatFileDiffs(props.timeline)
+  cachedFileToolsForChanges = fileTools
+  cachedChatFileChanges = changes
+  return cachedChatFileChanges
+})
+
+const lastTurnRestoreBoundary = computed((): LastTurnRestoreBoundary | null => {
   const lastTurnIndex = lastAgentTurnIndex.value
   if (lastTurnIndex < 0) {
-    return undefined
+    cachedRestoreBoundaryObj = null
+    return null
   }
+  let userMessageId: string | null = null
   for (let index = lastTurnIndex - 1; index >= 0; index -= 1) {
     const item = props.timeline[index]
     if (item?.type === 'user') {
-      return collectMutationsAfterUserMessage(props.timeline, item.message.id)
+      userMessageId = item.message.id
+      break
     }
   }
-  return undefined
+  if (!userMessageId) {
+    cachedRestoreBoundaryObj = null
+    return null
+  }
+  if (
+    cachedRestoreBoundaryObj &&
+    cachedRestoreBoundaryObj.lastTurnIndex === lastTurnIndex &&
+    cachedRestoreBoundaryObj.userMessageId === userMessageId
+  ) {
+    return cachedRestoreBoundaryObj
+  }
+  cachedRestoreBoundaryObj = { lastTurnIndex, userMessageId }
+  return cachedRestoreBoundaryObj
+})
+
+const lastTurnRestoreChanges = computed((): AggregatedTurnFileChange[] | undefined => {
+  const boundary = lastTurnRestoreBoundary.value
+  const fileTools = completedFileTools.value
+  if (!boundary) {
+    return undefined
+  }
+  if (cachedRestoreBoundary === boundary && cachedRestoreFileTools === fileTools) {
+    return cachedLastTurnRestoreChanges
+  }
+  const changes = collectMutationsAfterUserMessage(props.timeline, boundary.userMessageId)
+  cachedRestoreBoundary = boundary
+  cachedRestoreFileTools = fileTools
+  cachedLastTurnRestoreChanges = changes
+  return cachedLastTurnRestoreChanges
 })
 
 const lastTurnCanRestore = computed(() => (lastTurnRestoreChanges.value?.length ?? 0) > 0)
@@ -311,6 +486,60 @@ const agentTurnActivityLabel = (index: number): string | null => {
   }
   return activityLabel.value
 }
+
+type VisibleTimelineRow = {
+  id: string
+  index: number
+  item: ChatTimelineItem
+  placeholderHeight?: number
+}
+
+const timelineRows = computed((): VisibleTimelineRow[] => {
+  const items = visibleTimeline.value
+  const windowed = windowedMessageIds.value
+  const pinTail =
+    isLive.value || Boolean(activityLabel.value) || props.compacting === true
+  const lastIndex = items.length - 1
+  return items.map((item, index) => {
+    const id = timelineItemId(item, index)
+    const mount =
+      (pinTail && index === lastIndex) ||
+      windowed == null ||
+      windowed.has(id)
+    return {
+      id,
+      index,
+      item,
+      placeholderHeight: mount ? undefined : itemPlaceholderHeight(id),
+    }
+  })
+})
+
+watch(
+  [visibleTimeline, trailingActivityLabel, isLive, activityLabel, () => props.compacting],
+  () => {
+    const items = visibleTimeline.value
+    const ids = items.map((item, index) => timelineItemId(item, index))
+    if (trailingActivityLabel.value) {
+      ids.push('live-activity')
+    }
+    setItemIds(ids)
+
+    const pinned: string[] = []
+    if (isLive.value || activityLabel.value || props.compacting) {
+      const lastItem = items[items.length - 1]
+      if (lastItem) {
+        pinned.push(timelineItemId(lastItem, items.length - 1))
+      }
+      if (trailingActivityLabel.value) {
+        pinned.push('live-activity')
+      }
+    }
+    setPinnedMessageIds(pinned)
+  },
+  { immediate: true },
+)
+
 const followLiveOutput = async (): Promise<void> => {
   if (!isLive.value && !activityLabel.value && !props.compacting) {
     return
@@ -326,8 +555,32 @@ const followLiveOutput = async (): Promise<void> => {
   }
 }
 
+let followLiveFrame: number | null = null
+
+const cancelFollowLiveOutput = (): void => {
+  if (followLiveFrame === null) {
+    return
+  }
+  window.cancelAnimationFrame(followLiveFrame)
+  followLiveFrame = null
+}
+
+const scheduleFollowLiveOutput = (): void => {
+  if (followLiveFrame !== null) {
+    return
+  }
+  followLiveFrame = window.requestAnimationFrame(() => {
+    followLiveFrame = null
+    void followLiveOutput()
+  })
+}
+
 watch(streamRevision, () => {
-  followLiveOutput()
+  scheduleFollowLiveOutput()
+})
+
+onBeforeUnmount(() => {
+  cancelFollowLiveOutput()
 })
 
 watch(activityLabel, () => {
@@ -360,38 +613,39 @@ watch(
         class="mx-auto w-full min-w-0 max-w-3xl gap-6 overflow-x-hidden p-4 pb-2"
       >
         <MessageScrollerItem
-          v-for="(item, index) in visibleTimeline"
-          :key="timelineItemId(item, index)"
-          :message-id="timelineItemId(item, index)"
-          :scroll-anchor="isLastItem(index) && !trailingActivityLabel && !compacting"
+          v-for="row in timelineRows"
+          :key="row.id"
+          :message-id="row.id"
+          :scroll-anchor="isLastItem(row.index) && !trailingActivityLabel && !compacting"
+          :placeholder-height="row.placeholderHeight"
           class="min-w-0 max-w-full"
         >
           <ChatMessageTurn
-            v-if="item.type === 'user'"
-            :message="item.message"
+            v-if="row.item.type === 'user'"
+            :message="row.item.message"
             :editable="!readOnly && !isLive"
           />
           <ChatCompactionMarker
-            v-else-if="item.type === 'compaction'"
+            v-else-if="row.item.type === 'compaction'"
           />
           <ChatSubAgentTurn
-            v-else-if="item.type === 'subagent'"
-            :subagent="item"
+            v-else-if="row.item.type === 'subagent'"
+            :subagent="row.item"
             @stop-subagent="emit('stopSubagent', $event)"
           />
           <ChatAgentTurn
-            v-else-if="item.type === 'agent-turn'"
-            :turn="item.turn"
-            :status="isLastItem(index) ? status : 'ready'"
-            :activity-label="agentTurnActivityLabel(index)"
+            v-else-if="row.item.type === 'agent-turn'"
+            :turn="row.item.turn"
+            :status="isLastItem(row.index) ? status : 'ready'"
+            :activity-label="agentTurnActivityLabel(row.index)"
             :subagents-by-tool-call-id="subagentsByToolCallId"
             :subagents-by-id="subagentsById"
-            :restore-enabled="!readOnly && !isLive && (index !== lastVisibleAgentTurnIndex || lastTurnCanRestore)"
-            :chat-file-changes="index === lastVisibleAgentTurnIndex ? chatFileChanges : null"
-            :restore-changes="index === lastVisibleAgentTurnIndex ? lastTurnRestoreChanges : undefined"
-            :restore-discards-latest-message="index === lastVisibleAgentTurnIndex ? hasUserMessageAfterLastTurn : undefined"
+            :restore-enabled="!readOnly && !isLive && (row.index !== lastVisibleAgentTurnIndex || lastTurnCanRestore)"
+            :chat-file-changes="row.index === lastVisibleAgentTurnIndex ? chatFileChanges : null"
+            :restore-changes="row.index === lastVisibleAgentTurnIndex ? lastTurnRestoreChanges : undefined"
+            :restore-discards-latest-message="row.index === lastVisibleAgentTurnIndex ? hasUserMessageAfterLastTurn : undefined"
             @retry="emit('retry')"
-            @restore-files="emit('restoreFiles', item.turn.id)"
+            @restore-files="emit('restoreFiles', row.item.turn.id)"
             @stop-subagent="emit('stopSubagent', $event)"
           />
         </MessageScrollerItem>
