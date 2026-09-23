@@ -6,7 +6,6 @@ import ChatPromptInput from '@/components/chat/ChatPromptInput.vue'
 import ChatPromptEditor from '@/components/chat/prompt-editor/ChatPromptEditor.vue'
 import { HOME_CHAT_SLUG } from '@/constants/home-chat'
 import ModelOptionsRow from '@/components/models/options/ModelOptionsRow.vue'
-import formatModelLabelFromRef from '@/utils/format-model-label-from-ref'
 
 const toastError = vi.hoisted(() => vi.fn<(...args: unknown[]) => void>())
 const normalizeAttachmentFiles = vi.hoisted(
@@ -292,21 +291,17 @@ describe('ChatPromptInput subagent composer props', () => {
     wrapper.unmount()
   })
 
-  it('renders the read-only model label instead of the model picker', async () => {
-    const wrapper = mountPromptInput({ readOnlyModel: 'openai::gpt-4o' })
+  it('hides the model picker when hideModel is set', async () => {
+    const wrapper = mountPromptInput({ hideModel: true })
     await flushPromises()
 
-    const expectedLabel = formatModelLabelFromRef('openai::gpt-4o')
-    expect(expectedLabel.length).toBeGreaterThan(0)
-    const label = wrapper.find(`span[title="${expectedLabel}"]`)
-    expect(label.exists()).toBe(true)
-    expect(label.text()).toBe(expectedLabel)
     expect(wrapper.findComponent(ModelOptionsRow).exists()).toBe(false)
+    expect(wrapper.find('span.max-w-56').exists()).toBe(false)
 
     wrapper.unmount()
   })
 
-  it('renders the model picker when readOnlyModel is not set', async () => {
+  it('renders the model picker by default', async () => {
     const wrapper = mountPromptInput()
     await flushPromises()
 

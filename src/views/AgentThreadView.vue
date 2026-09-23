@@ -35,7 +35,6 @@ const {
   chatPromptInputRef,
   pendingQuestion,
   compacting,
-  subagentModel,
   timeline,
   todos,
   runningShells,
@@ -223,7 +222,7 @@ const pills = computed(() => {
           :permission-level="activePermissionLevel"
           :waiting-on-background="isSubagentView ? false : isWaitingOnBackground"
           :allow-submit-while-busy="isSubagentView"
-          :read-only-model="isSubagentView ? subagentModel : null"
+          :hide-model="isSubagentView"
           :hide-stop="isSubagentView"
           @submit="handleSubmit"
           @submit-edit="handleSubmitEdit"
