@@ -2,43 +2,17 @@ use std::collections::{HashSet, VecDeque};
 use std::fs;
 use std::path::Path;
 
+use crate::commands::skip_dirs::skip_directory;
+
 use super::builtins::builtin_specs;
 use super::helpers::{dedicated_extension_rank, root_marker_score, tier_rank};
 use super::types::LspTier;
-
-const SKIP_DIRS: &[&str] = &[
-    "node_modules",
-    ".git",
-    "dist",
-    "build",
-    "target",
-    ".next",
-    ".nuxt",
-    "coverage",
-    "out",
-    ".output",
-    "vendor",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".vixl",
-    ".cache",
-    ".turbo",
-    ".pnpm-store",
-];
 
 const MAX_FILES: usize = 20_000;
 
 pub struct WorkspaceWarmPlan {
     pub server_ids: Vec<String>,
     pub extensions: Vec<String>,
-}
-
-fn skip_directory(name: &str) -> bool {
-    if SKIP_DIRS.contains(&name) {
-        return true;
-    }
-    name.starts_with('.') && name != ".github"
 }
 
 fn extension_for_path(path: &Path) -> Option<String> {

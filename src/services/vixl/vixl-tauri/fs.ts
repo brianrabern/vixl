@@ -7,8 +7,7 @@ import type {
   WorkspaceGrepResult,
 } from './types'
 
-export const revealInFolder = (path: string): Promise<void> =>
-  call('reveal_in_folder', { path })
+export const revealInFolder = (path: string): Promise<void> => call('reveal_in_folder', { path })
 
 export const openFolderPicker = async (): Promise<string | null> => {
   if (!isTauri()) {
@@ -94,16 +93,27 @@ export const fsEditFile = (args: {
   replacements: FsEditReplacement[]
 }): Promise<FileDiffRecord> => call('fs_edit_file', args)
 
-export const fsApplyPatch = (args: {
-  projectRoot: string
-  patch: string
-}): Promise<unknown> => call('fs_apply_patch', args)
+export const fsApplyPatch = (args: { projectRoot: string; patch: string }): Promise<unknown> =>
+  call('fs_apply_patch', args)
 
 export const fsListDir = (
   projectRoot: string,
   path: string,
 ): Promise<Array<{ name: string; path: string; kind: string }>> =>
   call('fs_list_dir', { projectRoot, path })
+
+export const watchWorkspace = (args: {
+  projectRoot: string
+  mode?: 'shallow'
+}): Promise<string> => call('watch_workspace', args)
+
+export const unwatchWorkspace = (args: { projectRoot: string }): Promise<void> =>
+  call('unwatch_workspace', args)
+
+export const watchWorkspacePaths = (args: {
+  projectRoot: string
+  paths: string[]
+}): Promise<void> => call('watch_workspace_paths', args)
 
 export const fsStat = (
   projectRoot: string,
@@ -150,10 +160,8 @@ export const fsMove = (args: {
   allowSensitive?: boolean
 }): Promise<void> => call('fs_move', args)
 
-export const fsMkdir = (args: {
-  projectRoot: string
-  path: string
-}): Promise<void> => call('fs_mkdir', args)
+export const fsMkdir = (args: { projectRoot: string; path: string }): Promise<void> =>
+  call('fs_mkdir', args)
 
 export const fsStagePreviewWrite = (args: {
   projectRoot: string

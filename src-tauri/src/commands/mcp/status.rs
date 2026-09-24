@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use super::rpc::{json_rpc, list_tools_internal};
 use super::spawn::mcp_stop;
-use super::types::{
-    mcp_connection_key, set_state, McpServerState, MCP_PROCESSES, MCP_STATES,
-};
+use super::types::{mcp_connection_key, set_state, McpServerState, MCP_PROCESSES, MCP_STATES};
 
 fn resolved_scope_key(scope_key: Option<&str>) -> String {
     scope_key.unwrap_or("personal").to_string()

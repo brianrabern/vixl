@@ -1,23 +1,9 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import mcpRuntime from '@/services/mcp/mcp-runtime'
-import {
-  fsDelete,
-  fsMkdir,
-  fsRename,
-  fsWriteFile,
-} from '@/services/vixl/vixl-tauri'
-import {
-  CODEGRAPH_DIR_NAME,
-  CODEGRAPH_SERVER_ID,
-} from '@/types/codegraph/managed-codegraph'
-import {
-  findNodeKind,
-  joinPath,
-  parentPath,
-  treeErrorMessage,
-  type TreeNode,
-} from './path-helpers'
+import { fsDelete, fsMkdir, fsRename, fsWriteFile } from '@/services/vixl/vixl-tauri'
+import { CODEGRAPH_DIR_NAME, CODEGRAPH_SERVER_ID } from '@/types/codegraph/managed-codegraph'
+import { findNodeKind, joinPath, parentPath, treeErrorMessage, type TreeNode } from './path-helpers'
 
 const isCodegraphWorkspacePath = (path: string): boolean =>
   path === CODEGRAPH_DIR_NAME || path.startsWith(`${CODEGRAPH_DIR_NAME}/`)
@@ -57,11 +43,7 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
     const destination = joinPath(parentPath(path), trimmed)
 
     try {
-      await fsRename({ projectRoot: root,
-        from: path,
-        to: destination,
-        allowSensitive: true,
-      })
+      await fsRename({ projectRoot: root, from: path, to: destination, allowSensitive: true })
       s.renamingPath.value = null
       await s.refresh()
     } catch (error) {
@@ -78,9 +60,7 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
   const handleDeleteConfirm = async (): Promise<void> => {
     const root = s.projectRoot.value
     const target = s.deleteTarget.value
-    const snapshot = target
-      ? { path: target.path, isDirectory: target.isDirectory }
-      : null
+    const snapshot = target ? { path: target.path, isDirectory: target.isDirectory } : null
 
     if (!root) {
       toast.error('Project root is unavailable')
@@ -145,12 +125,8 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
     }
   }
 
-  const openCreateDialog = (
-    mode: 'file' | 'folder',
-    parentDirPath?: string,
-  ): void => {
-    createParentOverride.value =
-      typeof parentDirPath === 'string' ? parentDirPath : null
+  const openCreateDialog = (mode: 'file' | 'folder', parentDirPath?: string): void => {
+    createParentOverride.value = typeof parentDirPath === 'string' ? parentDirPath : null
     s.createDialogMode.value = mode
     s.createName.value = ''
     s.createDialogOpen.value = true
@@ -205,12 +181,9 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
         s.emit('select', destination)
       }
     } catch (error) {
-      toast.error(
-        mode === 'folder' ? 'Failed to create folder' : 'Failed to create file',
-        {
-          description: error instanceof Error ? error.message : 'Unknown error',
-        },
-      )
+      toast.error(mode === 'folder' ? 'Failed to create folder' : 'Failed to create file', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
     } finally {
       s.creating.value = false
     }
@@ -252,7 +225,6 @@ export const createFileTreeMutations = (s: FileTreeMutationState) => {
     }
     handleRenameCancel()
   }
-
 
   return {
     handleRenameConfirm,

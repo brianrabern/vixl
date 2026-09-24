@@ -22,13 +22,23 @@ export function createVixlTauriMock(overrides: Record<string, unknown> = {}) {
     })),
     writeMcpConfig: vi.fn<() => Promise<void>>(async () => {}),
     setMcpServerEnabled: vi.fn<
-      (scope: string, serverId: string, enabled: boolean, rootPath?: string | null) => Promise<boolean>
+      (
+        scope: string,
+        serverId: string,
+        enabled: boolean,
+        rootPath?: string | null,
+      ) => Promise<boolean>
     >(async () => true),
     listVixlFiles: vi.fn<() => Promise<unknown[]>>(async () => []),
     getVixlDir: vi.fn<(scope: string) => Promise<string>>(async () => '/tmp/personal-vixl'),
     mcpListStatuses: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({})),
     fsReadFile: vi.fn<() => Promise<{ content: string }>>(async () => ({ content: '' })),
     fsListDir: vi.fn<() => Promise<unknown>>(),
+    watchWorkspace: vi.fn<(args: { projectRoot: string; mode?: 'shallow' }) => Promise<string>>(
+      async (args) => args.projectRoot,
+    ),
+    unwatchWorkspace: vi.fn<() => Promise<void>>(async () => undefined),
+    watchWorkspacePaths: vi.fn<() => Promise<void>>(async () => undefined),
     fsWriteFile: vi.fn<() => Promise<unknown>>(),
     fsEditFile: vi.fn<() => Promise<unknown>>(),
     fsApplyPatch: vi.fn<() => Promise<unknown>>(),

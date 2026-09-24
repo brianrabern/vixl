@@ -10,8 +10,9 @@ use app_lib::commands::lsp::{
     lsp_invalid_stream_error, lsp_request_timeout_error, merge_vue_plugin_options,
     normalize_lsp_method, normalize_lsp_params, parse_diagnostic_provider,
     parse_workspace_diagnostic_report, pick_typescript_tsdk, read_lsp_message, resolve_lsp_servers,
-    server_display_label, should_inject_vue_typescript_plugin, start_lock_for, tsserver_request_body,
-    typescript_lsp_argv, typescript_version_supports_native_lsp, unwrap_tsserver_request_tuple,
+    server_display_label, should_inject_vue_typescript_plugin, start_lock_for,
+    tsserver_request_body, typescript_lsp_argv, typescript_version_supports_native_lsp,
+    unwrap_tsserver_request_tuple,
 };
 use app_lib::commands::lsp_install::{
     looks_like_javascript_bin, should_wrap_npm_bin_with_node, with_timeout,

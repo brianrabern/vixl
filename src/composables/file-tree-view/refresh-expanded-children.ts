@@ -8,8 +8,7 @@ export default async (
 ): Promise<void> => {
   const paths = [...expandedPaths.value].sort(
     (left, right) =>
-      left.split('/').filter(Boolean).length
-      - right.split('/').filter(Boolean).length,
+      left.split('/').filter(Boolean).length - right.split('/').filter(Boolean).length,
   )
   const nextExpanded = new Set<string>()
   for (const path of paths) {

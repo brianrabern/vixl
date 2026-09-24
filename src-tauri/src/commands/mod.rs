@@ -21,9 +21,11 @@ pub mod registry;
 pub mod sandbox;
 pub mod search;
 pub mod shell;
+mod skip_dirs;
 pub mod watch;
 pub mod web_fetch;
 pub mod workbench;
+pub mod workspace_watch;
 pub use chat::{
     append_chat_line, create_chat, delete_chat, fork_chat, list_chats, list_pinned_chats,
     move_chat_to_workspace, pin_chat, read_chat_messages, read_chat_meta, read_chat_usage,
@@ -54,8 +56,8 @@ pub use lsp::{
 };
 pub use lsp_install::{lsp_install_server, lsp_prefetch_defaults};
 pub use mcp::{
-    get_env_vars, mcp_call_tool, mcp_list_statuses, mcp_logout, mcp_refresh, mcp_start,
-    mcp_status, mcp_stop,
+    get_env_vars, mcp_call_tool, mcp_list_statuses, mcp_logout, mcp_refresh, mcp_start, mcp_status,
+    mcp_stop,
 };
 pub use oauth::{
     oauth_begin_loopback, oauth_cancel_loopback, open_external_url, OAuthLoopbackState,
@@ -79,4 +81,7 @@ pub use web_fetch::web_fetch;
 pub use workbench::{
     editor_load_view_state, editor_save_view_state, workbench_load_session,
     workbench_replace_session,
+};
+pub use workspace_watch::{
+    unwatch_workspace, watch_workspace, watch_workspace_paths, WorkspaceWatchState,
 };

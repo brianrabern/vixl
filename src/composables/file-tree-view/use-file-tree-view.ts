@@ -1,9 +1,6 @@
 import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import {
-  fsListDir,
-  fsListDirTree,
-} from '@/services/vixl/vixl-tauri'
+import { fsListDir, fsListDirTree } from '@/services/vixl/vixl-tauri'
 import useWorkbenchStore from '@/composables/use-workbench-store'
 import { isHomeChatSlug } from '@/constants/home-chat'
 import {
@@ -14,9 +11,7 @@ import {
   FileTreeStartDeleteKey,
   FileTreeStartRenameKey,
 } from '@/composables/use-file-tree-node-menu'
-import useGitStatus, {
-  FileTreeGitDecorationKey,
-} from '@/composables/use-git-status'
+import useGitStatus, { FileTreeGitDecorationKey } from '@/composables/use-git-status'
 import {
   type TreeNode,
   findNode,
@@ -28,6 +23,8 @@ import {
 } from './path-helpers'
 import { createFileTreeMutations } from './mutations'
 import refreshExpandedChildren from './refresh-expanded-children'
+import scrollPathIntoView from './scroll-path-into-view'
+import { bindFileTreeWorkspaceSync } from './workspace-tree-sync'
 
 export default (
   props: { projectId: string; selectedPath?: string | null },
@@ -60,9 +57,7 @@ export default (
     return project.name
   })
 
-  const projectRoot = computed(
-    () => workbench.getProject(props.projectId)?.rootPath ?? null,
-  )
+  const projectRoot = computed(() => workbench.getProject(props.projectId)?.rootPath ?? null)
 
   const projectIdRef = computed(() => props.projectId)
 
@@ -129,19 +124,6 @@ export default (
     }))
   }
 
-  const scrollPathIntoView = async (path: string): Promise<void> => {
-    await nextTick()
-    const escaped = CSS.escape(path)
-    let element = document.querySelector(`[data-path="${escaped}"]`)
-    if (!(element instanceof HTMLElement)) {
-      await nextTick()
-      element = document.querySelector(`[data-path="${escaped}"]`)
-    }
-    if (element instanceof HTMLElement) {
-      element.scrollIntoView({ block: 'nearest' })
-    }
-  }
-
   const revealPath = async (path: string): Promise<void> => {
     if (!path || !tree.value) {
       return
@@ -186,19 +168,15 @@ export default (
   }
 
   provide(FileTreeRefreshKey, refresh)
-
   const startRename = (path: string): void => {
     renamingPath.value = path
   }
-
   const startDelete = (path: string, isDirectory: boolean): void => {
     deleteTarget.value = { path, isDirectory }
   }
 
   provide(FileTreeStartRenameKey, startRename)
   provide(FileTreeStartDeleteKey, startDelete)
-
-
 
   const mutations = createFileTreeMutations({
     props,
@@ -236,6 +214,18 @@ export default (
 
   provide(FileTreeStartCreateKey, startCreate)
 
+  bindFileTreeWorkspaceSync({
+    isHome: () => isHomeChatSlug(props.projectId),
+    tree,
+    expandedPaths,
+    selectedPath,
+    renamingPath,
+    deleteTarget,
+    projectRoot,
+    refreshGit: gitStatus.refresh,
+    onTreeChanged: () => emit('tree-changed'),
+  })
+
   onMounted(() => {
     document.addEventListener('pointerdown', handlePointerDownOutsideRename)
     loadTree()
@@ -251,18 +241,15 @@ export default (
     document.removeEventListener('pointerdown', handlePointerDownOutsideRename)
   })
 
-  watch(
-    projectRoot,
-    () => {
-      loadTree()
-        .then(() => gitStatus.refresh())
-        .catch((error) => {
-          toast.error('Failed to load file tree', {
-            description: treeErrorMessage(error),
-          })
+  watch(projectRoot, () => {
+    loadTree()
+      .then(() => gitStatus.refresh())
+      .catch((error) => {
+        toast.error('Failed to load file tree', {
+          description: treeErrorMessage(error),
         })
-    },
-  )
+      })
+  })
 
   watch(
     () => props.selectedPath,

@@ -24,10 +24,7 @@ fn focus_main_window(app: &AppHandle) {
     }
 }
 
-#[cfg_attr(
-    not(any(target_os = "macos", target_os = "ios")),
-    allow(dead_code)
-)]
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 fn opened_urls_to_dirs(urls: Vec<tauri::Url>) -> Vec<PathBuf> {
     urls.into_iter()
         .filter_map(|url| url.to_file_path().ok())
@@ -54,10 +51,7 @@ pub fn handle_second_instance(app: &AppHandle, args: Vec<String>) {
     }
 }
 
-#[cfg_attr(
-    not(any(target_os = "macos", target_os = "ios")),
-    allow(dead_code)
-)]
+#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))]
 pub fn handle_opened_urls(app: &AppHandle, urls: Vec<tauri::Url>) {
     let mut opened_any = false;
     for path in opened_urls_to_dirs(urls) {
