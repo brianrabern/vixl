@@ -114,7 +114,7 @@ const modelPlaceholder = (role: ModelRoleDefinition): string => {
 </script>
 
 <template>
-  <SettingsSectionScroll title="Models">
+  <SettingsSectionScroll>
     <div
       v-if="!hasProviders"
       class="flex items-center justify-center rounded-lg border border-dashed border-border/60 px-4 py-12"

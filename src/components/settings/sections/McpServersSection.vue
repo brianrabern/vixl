@@ -343,7 +343,7 @@ const refreshAll = async (): Promise<void> => {
 </script>
 
 <template>
-  <SettingsSectionScroll title="MCP">
+  <SettingsSectionScroll>
     <template #actions>
       <div class="flex items-center gap-0.5">
         <Tooltip v-if="scopedServers.length > 0">

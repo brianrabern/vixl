@@ -129,40 +129,37 @@ const handleRebuild = async (): Promise<void> => {
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
     <div class="flex shrink-0 items-center justify-between gap-3">
-      <div class="flex min-w-0 items-center gap-2">
-        <h2 class="text-lg font-medium">Graph</h2>
-        <Tooltip>
-          <TooltipTrigger as-child>
-            <span
-              class="inline-flex size-5 shrink-0 items-center justify-center"
-              :class="statusClass"
-              :aria-label="`Graph status: ${statusLabel}`"
-            >
-              <Loader2
-                v-if="rebuilding || codegraph.isBusy.value"
-                class="size-4 animate-spin"
-                aria-hidden="true"
-              />
-              <CircleAlert
-                v-else-if="codegraph.state.value === 'error'"
-                class="size-4"
-                aria-hidden="true"
-              />
-              <CircleCheck
-                v-else-if="codegraph.state.value === 'ready'"
-                class="size-4"
-                aria-hidden="true"
-              />
-              <Database
-                v-else
-                class="size-4"
-                aria-hidden="true"
-              />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>{{ statusTooltip }}</TooltipContent>
-        </Tooltip>
-      </div>
+      <Tooltip>
+        <TooltipTrigger as-child>
+          <span
+            class="inline-flex size-5 shrink-0 items-center justify-center"
+            :class="statusClass"
+            :aria-label="`Graph status: ${statusLabel}`"
+          >
+            <Loader2
+              v-if="rebuilding || codegraph.isBusy.value"
+              class="size-4 animate-spin"
+              aria-hidden="true"
+            />
+            <CircleAlert
+              v-else-if="codegraph.state.value === 'error'"
+              class="size-4"
+              aria-hidden="true"
+            />
+            <CircleCheck
+              v-else-if="codegraph.state.value === 'ready'"
+              class="size-4"
+              aria-hidden="true"
+            />
+            <Database
+              v-else
+              class="size-4"
+              aria-hidden="true"
+            />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{{ statusTooltip }}</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger as-child>
           <Button

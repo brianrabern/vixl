@@ -1,0 +1,207 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { VixlSettings } from '@/types/vixl/vixl-settings'
+import type { HarnessToolContext } from '@/types/harness/tool-context'
+import type { FileDiff } from '@/types/harness/file-diff'
+import { mockVixlTauri } from '../../../test-utils/mocks/vixl-tauri'
+
+const notifyWorkspaceFsMutation = vi.hoisted(() =>
+  vi.fn<(projectRoot: string, paths: string[]) => void>(),
+)
+const gateToolPermission = vi.hoisted(() => vi.fn<() => Promise<boolean>>())
+const captureBaselinesBeforeMutate = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined),
+)
+const fsWriteFile = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; path: string; content: string }) => Promise<unknown>>(
+    async () => undefined,
+  ),
+)
+const fsDelete = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; path: string; recursive?: boolean }) => Promise<void>>(
+    async () => undefined,
+  ),
+)
+const fsMove = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; from: string; to: string }) => Promise<void>>(
+    async () => undefined,
+  ),
+)
+const fsApplyPatch = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; patch: string }) => Promise<unknown>>(async () => []),
+)
+const fsStagePreviewWrite = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; path: string; content: string }) => Promise<FileDiff[]>>(
+    async () => [],
+  ),
+)
+const fsStagePreviewDelete = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; path: string }) => Promise<FileDiff[]>>(async () => []),
+)
+const fsStagePreviewApplyPatch = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; patch: string }) => Promise<FileDiff[]>>(async () => []),
+)
+
+vi.mock('@/services/harness/shared/notify-fs-mutation', () => ({
+  notifyWorkspaceFsMutation,
+}))
+
+vi.mock('@/services/harness/permission/gate', () => ({
+  gateToolPermission,
+}))
+
+vi.mock('@/services/harness/capture-baselines-before-mutate', () => ({
+  default: captureBaselinesBeforeMutate,
+}))
+
+vi.mock('@/services/vixl/vixl-tauri', () =>
+  mockVixlTauri({
+    fsWriteFile,
+    fsDelete,
+    fsMove,
+    fsApplyPatch,
+    fsStagePreviewWrite,
+    fsStagePreviewDelete,
+    fsStagePreviewApplyPatch,
+  }),
+)
+
+import writeFile from '@/services/harness/write/file'
+import deleteFile from '@/services/harness/write/delete-file'
+import moveFile from '@/services/harness/write/move-file'
+import applyPatch from '@/services/harness/edit/apply-patch'
+
+const emptyDiff = (path: string, operation: FileDiff['operation']): FileDiff => ({
+  path,
+  operation,
+  hunks: [],
+})
+
+const baseCtx = (): HarnessToolContext => ({
+  projectRoot: '/tmp/project',
+  projectSlug: 'project',
+  chatId: 'chat-1',
+  mode: 'agent',
+  userMessageId: 'user-1',
+  settings: { version: 1 } as VixlSettings,
+  permissionLevel: 'ask',
+  sessionAllows: new Set(),
+  sessionDenies: new Set(),
+  sandboxEnabled: true,
+  supportsVision: false,
+  onPendingApproval: () => {},
+})
+
+const execute = async (
+  tool: { execute?: unknown },
+  input: Record<string, unknown>,
+): Promise<unknown> => {
+  const runner = tool.execute as (
+    value: Record<string, unknown>,
+    options: { toolCallId: string },
+  ) => Promise<unknown>
+  return runner(input, { toolCallId: 'call-1' })
+}
+
+describe('harness tools notify workspace fs mutations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    gateToolPermission.mockResolvedValue(true)
+    fsStagePreviewWrite.mockResolvedValue([emptyDiff('src/a.ts', 'create')])
+    fsStagePreviewDelete.mockResolvedValue([emptyDiff('src/a.ts', 'delete')])
+    fsStagePreviewApplyPatch.mockResolvedValue([
+      emptyDiff('src/added.ts', 'create'),
+      emptyDiff('src/gone.ts', 'delete'),
+      emptyDiff('src/moved.ts', 'rename'),
+      emptyDiff('src/edited.ts', 'update'),
+    ])
+  })
+
+  it('write_file notifies after a successful write', async () => {
+    const result = await execute(writeFile(baseCtx()), {
+      path: 'src/a.ts',
+      content: 'next',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, path: 'src/a.ts' }))
+    expect(notifyWorkspaceFsMutation).toHaveBeenCalledWith('/tmp/project', ['src/a.ts'])
+  })
+
+  it('write_file does not notify when the permission gate rejects', async () => {
+    gateToolPermission.mockResolvedValue(false)
+    const result = await execute(writeFile(baseCtx()), {
+      path: 'src/a.ts',
+      content: 'next',
+    })
+
+    expect(result).toEqual({ rejected: true, error: 'Write not approved' })
+    expect(fsWriteFile).not.toHaveBeenCalled()
+    expect(notifyWorkspaceFsMutation).not.toHaveBeenCalled()
+  })
+
+  it('delete_file notifies after a successful delete', async () => {
+    const result = await execute(deleteFile(baseCtx()), { path: 'src/a.ts' })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, path: 'src/a.ts' }))
+    expect(notifyWorkspaceFsMutation).toHaveBeenCalledWith('/tmp/project', ['src/a.ts'])
+  })
+
+  it('delete_file does not notify when the permission gate rejects', async () => {
+    gateToolPermission.mockResolvedValue(false)
+    const result = await execute(deleteFile(baseCtx()), { path: 'src/a.ts' })
+
+    expect(result).toEqual({ rejected: true, error: 'Delete not approved' })
+    expect(fsDelete).not.toHaveBeenCalled()
+    expect(notifyWorkspaceFsMutation).not.toHaveBeenCalled()
+  })
+
+  it('move_file notifies after a successful move with from and to', async () => {
+    const result = await execute(moveFile(baseCtx()), {
+      from: 'src/a.ts',
+      to: 'lib/b.ts',
+    })
+
+    expect(result).toEqual(expect.objectContaining({ ok: true, from: 'src/a.ts', to: 'lib/b.ts' }))
+    expect(notifyWorkspaceFsMutation).toHaveBeenCalledWith('/tmp/project', ['src/a.ts', 'lib/b.ts'])
+  })
+
+  it('move_file does not notify when the permission gate rejects', async () => {
+    gateToolPermission.mockResolvedValue(false)
+    const result = await execute(moveFile(baseCtx()), {
+      from: 'src/a.ts',
+      to: 'lib/b.ts',
+    })
+
+    expect(result).toEqual({ rejected: true, error: 'Move not approved' })
+    expect(fsMove).not.toHaveBeenCalled()
+    expect(notifyWorkspaceFsMutation).not.toHaveBeenCalled()
+  })
+
+  it('apply_patch notifies with every path from the staged diffs', async () => {
+    const patch = '*** Update File: src/edited.ts\n@@\n-old\n+new'
+    const result = await execute(applyPatch(baseCtx()), { patch })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        paths: ['src/added.ts', 'src/gone.ts', 'src/moved.ts', 'src/edited.ts'],
+      }),
+    )
+    expect(notifyWorkspaceFsMutation).toHaveBeenCalledWith('/tmp/project', [
+      'src/added.ts',
+      'src/gone.ts',
+      'src/moved.ts',
+      'src/edited.ts',
+    ])
+  })
+
+  it('apply_patch does not notify when the permission gate rejects', async () => {
+    gateToolPermission.mockResolvedValue(false)
+    const result = await execute(applyPatch(baseCtx()), {
+      patch: '*** Update File: src/edited.ts\n@@\n-old\n+new',
+    })
+
+    expect(result).toEqual({ rejected: true, error: 'Patch not approved' })
+    expect(fsApplyPatch).not.toHaveBeenCalled()
+    expect(notifyWorkspaceFsMutation).not.toHaveBeenCalled()
+  })
+})

@@ -154,10 +154,8 @@ pub async fn web_fetch(request: WebFetchRequest) -> Result<WebFetchResponse, Str
 
     if let Some(content_type) = response_headers.get("content-type") {
         if is_image_content_type(content_type) {
-            let encoded = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &bytes,
-            );
+            let encoded =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
             return Ok(WebFetchResponse {
                 status,
                 body: String::new(),

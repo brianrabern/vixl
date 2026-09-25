@@ -112,7 +112,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <SettingsSectionScroll title="Permissions">
+  <SettingsSectionScroll>
     <template #actions>
       <Tooltip v-if="records.length > 0">
         <TooltipTrigger as-child>

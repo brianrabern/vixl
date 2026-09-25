@@ -4,6 +4,7 @@ import { fsMove } from '@/services/vixl/vixl-tauri'
 import { gateToolPermission } from '@/services/harness/permission/gate'
 import { fsWriteCapability } from '@/services/harness/permission/policy'
 import captureBaselinesBeforeMutate from '@/services/harness/capture-baselines-before-mutate'
+import { notifyWorkspaceFsMutation } from '@/services/harness/shared/notify-fs-mutation'
 import toPermCtx from '@/services/harness/shared/to-perm-ctx'
 import type { FileDiff } from '@/types/harness/file-diff'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
@@ -51,6 +52,7 @@ const moveFile = (ctx: HarnessToolContext) =>
 
       await captureBaselinesBeforeMutate(ctx, [from, to], toolCallId)
       await fsMove({ projectRoot: ctx.projectRoot, from, to })
+      notifyWorkspaceFsMutation(ctx.projectRoot, [from, to])
       return { ok: true, from, to, diffs }
     },
   })

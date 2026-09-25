@@ -194,6 +194,7 @@
     "useCached": true,
     "useChatContextActions": true,
     "useChatContextBudgetSync": true,
+    "useChatProjectId": true,
     "useChatPromptBridge": true,
     "useChatPromptEditor": true,
     "useChatStackPills": true,

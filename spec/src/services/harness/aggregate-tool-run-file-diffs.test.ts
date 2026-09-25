@@ -144,4 +144,153 @@ describe('aggregateToolRunFileDiffs', () => {
       { path: 'c.ts', operation: 'update', additions: 1, deletions: 1 },
     ])
   })
+
+  it('keeps rename destination from newContent as renameTo', () => {
+    const changes = aggregateToolRunFileDiffs([
+      run({
+        toolCallId: 'move',
+        status: 'done',
+        diffs: [
+          {
+            ...diff('old.ts', 'rename', 1, 1),
+            newContent: 'new.ts',
+          },
+        ],
+      }),
+    ])
+
+    expect(changes).toEqual([
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 1,
+        deletions: 1,
+        renameTo: 'new.ts',
+      },
+    ])
+  })
+
+  it('keeps the latest non-undefined renameTo when merging the same path', () => {
+    const existing: AggregatedTurnFileChange[] = [
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'mid.ts',
+      },
+    ]
+
+    const changes = aggregateToolRunFileDiffs(
+      [
+        run({
+          toolCallId: 'later',
+          status: 'done',
+          diffs: [
+            {
+              ...diff('old.ts', 'rename', 1, 0),
+              newContent: 'final.ts',
+            },
+          ],
+        }),
+      ],
+      existing,
+    )
+
+    expect(changes).toEqual([
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 1,
+        deletions: 0,
+        renameTo: 'final.ts',
+      },
+    ])
+  })
+
+  it('drops renameTo when a later delete for the same path upgrades the operation', () => {
+    const existing: AggregatedTurnFileChange[] = [
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 1,
+        deletions: 1,
+        renameTo: 'new.ts',
+      },
+    ]
+
+    const changes = aggregateToolRunFileDiffs(
+      [
+        run({
+          toolCallId: 'remove',
+          status: 'done',
+          diffs: [diff('old.ts', 'delete', 0, 2)],
+        }),
+      ],
+      existing,
+    )
+
+    expect(changes).toEqual([
+      { path: 'old.ts', operation: 'delete', additions: 1, deletions: 3 },
+    ])
+  })
+
+  it('drops incoming renameTo when an existing delete keeps priority', () => {
+    const existing: AggregatedTurnFileChange[] = [
+      { path: 'old.ts', operation: 'delete', additions: 0, deletions: 1 },
+    ]
+
+    const changes = aggregateToolRunFileDiffs(
+      [
+        run({
+          toolCallId: 'move',
+          status: 'done',
+          diffs: [
+            {
+              ...diff('old.ts', 'rename', 1, 0),
+              newContent: 'new.ts',
+            },
+          ],
+        }),
+      ],
+      existing,
+    )
+
+    expect(changes).toEqual([
+      { path: 'old.ts', operation: 'delete', additions: 1, deletions: 1 },
+    ])
+  })
+
+  it('preserves renameTo when a later merge for the same path omits it', () => {
+    const existing: AggregatedTurnFileChange[] = [
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'new.ts',
+      },
+    ]
+
+    const changes = aggregateToolRunFileDiffs(
+      [
+        run({
+          toolCallId: 'edit',
+          status: 'done',
+          diffs: [diff('old.ts', 'update', 1, 0)],
+        }),
+      ],
+      existing,
+    )
+
+    expect(changes).toEqual([
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 1,
+        deletions: 0,
+        renameTo: 'new.ts',
+      },
+    ])
+  })
 })

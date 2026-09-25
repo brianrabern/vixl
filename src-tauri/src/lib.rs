@@ -15,26 +15,26 @@ use commands::{
     editor_save_view_state, file_checkpoint_capture, file_checkpoint_restore, fork_chat,
     fs_apply_patch, fs_copy, fs_delete, fs_edit_file, fs_list_dir, fs_list_dir_tree, fs_mkdir,
     fs_move, fs_read_file, fs_rename, fs_stage_preview, fs_stat, fs_write_file, get_active_project,
-    get_default_workspace_root, get_env_vars, get_secret, get_user_vixl_dir, get_vixl_dir, git_branch_create,
-    git_checkout_branch, git_commit, git_diff, git_list_branches, git_log, git_repo_info,
-    git_show_file, git_status, has_project_vixl, http_proxy_request, http_proxy_stream,
-    http_proxy_stream_cancel, list_chats, list_graphs, list_pinned_chats, list_project_files,
-    list_vixl_files, lsp_catalog, lsp_ensure_server, lsp_install_server, lsp_prefetch_defaults,
-    lsp_request, lsp_set_server_disabled, lsp_status, lsp_stop_server, lsp_uninstall_server,
-    lsp_workspace_diagnostics, lsp_workspace_profile, mcp_call_tool, mcp_list_statuses,
-    mcp_logout, mcp_refresh, mcp_start, mcp_status, mcp_stop,
+    get_default_workspace_root, get_env_vars, get_secret, get_user_vixl_dir, get_vixl_dir,
+    git_branch_create, git_checkout_branch, git_commit, git_diff, git_list_branches, git_log,
+    git_repo_info, git_show_file, git_status, has_project_vixl, http_proxy_request,
+    http_proxy_stream, http_proxy_stream_cancel, list_chats, list_graphs, list_pinned_chats,
+    list_project_files, list_vixl_files, lsp_catalog, lsp_ensure_server, lsp_install_server,
+    lsp_prefetch_defaults, lsp_request, lsp_set_server_disabled, lsp_status, lsp_stop_server,
+    lsp_uninstall_server, lsp_workspace_diagnostics, lsp_workspace_profile, mcp_call_tool,
+    mcp_list_statuses, mcp_logout, mcp_refresh, mcp_start, mcp_status, mcp_stop,
     move_chat_to_workspace, oauth_begin_loopback, oauth_cancel_loopback, open_external_url,
     open_project_at_path, open_project_at_path_command, pin_chat, read_chat_messages,
-    read_chat_meta, read_chat_usage, read_json_file, read_lsp_config, read_mcp_config,
-    read_clipboard_image_png, read_settings, registry_add_project, registry_list_projects,
-    registry_remove_project,
-    registry_set_active_project, registry_update_project_root, resolve_launch_path,
-    reveal_in_folder, set_mcp_server_enabled, set_secret, shell_kill_pty, shell_kill_tracked,
-    shell_resize_pty, shell_spawn_pty, shell_spawn_tracked, shell_write_pty, truncate_chat_log,
-    update_chat_meta, watch_git_head, watch_vixl_paths, web_fetch, workbench_load_session,
+    read_chat_meta, read_chat_usage, read_clipboard_image_png, read_json_file, read_lsp_config,
+    read_mcp_config, read_settings, registry_add_project, registry_list_projects,
+    registry_remove_project, registry_set_active_project, registry_update_project_root,
+    resolve_launch_path, reveal_in_folder, set_mcp_server_enabled, set_secret, shell_kill_pty,
+    shell_kill_tracked, shell_resize_pty, shell_spawn_pty, shell_spawn_tracked, shell_write_pty,
+    truncate_chat_log, unwatch_workspace, update_chat_meta, watch_git_head, watch_vixl_paths,
+    watch_workspace, watch_workspace_paths, web_fetch, workbench_load_session,
     workbench_replace_session, workspace_glob, workspace_grep, write_chat_usage, write_json_file,
     write_lsp_config, write_mcp_config, write_settings, write_temp_bytes, write_temp_handoff,
-    write_text_file, GitHeadWatchState, OAuthLoopbackState, WatchState,
+    write_text_file, GitHeadWatchState, OAuthLoopbackState, WatchState, WorkspaceWatchState,
 };
 use vibrancy::{clear_window_vibrancy, set_window_vibrancy};
 
@@ -60,6 +60,7 @@ pub fn run_with_launch_path(launch_path: Option<String>) {
     let builder = builder
         .manage(WatchState::new())
         .manage(GitHeadWatchState::new())
+        .manage(WorkspaceWatchState::new())
         .manage(HttpStreamRegistry::default())
         .manage(OAuthLoopbackState::new())
         .setup(move |app| {
@@ -161,6 +162,9 @@ pub fn run_with_launch_path(launch_path: Option<String>) {
         oauth_cancel_loopback,
         watch_vixl_paths,
         watch_git_head,
+        watch_workspace,
+        unwatch_workspace,
+        watch_workspace_paths,
         create_chat,
         list_chats,
         read_chat_meta,

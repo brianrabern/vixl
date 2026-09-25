@@ -68,6 +68,9 @@ export {
   fsEditFile,
   fsApplyPatch,
   fsListDir,
+  watchWorkspace,
+  unwatchWorkspace,
+  watchWorkspacePaths,
   fsStat,
   fsListDirTree,
   fsRename,
@@ -82,12 +85,7 @@ export {
   workspaceGrep,
   workspaceGlob,
 } from './fs'
-export {
-  codegraphCli,
-  codegraphStoreStat,
-  listGraphs,
-  deleteGraph,
-} from './codegraph'
+export { codegraphCli, codegraphStoreStat, listGraphs, deleteGraph } from './codegraph'
 export {
   gitStatus,
   gitDiff,

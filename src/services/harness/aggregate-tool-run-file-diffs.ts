@@ -17,13 +17,23 @@ const mergeChange = (
 ): void => {
   const existing = byPath.get(change.path)
   if (!existing) {
-    byPath.set(change.path, { ...change })
+    const next = { ...change }
+    if (next.operation !== 'rename') {
+      delete next.renameTo
+    }
+    byPath.set(change.path, next)
     return
   }
   existing.additions += change.additions
   existing.deletions += change.deletions
   if (operationPriority[change.operation] > operationPriority[existing.operation]) {
     existing.operation = change.operation
+  }
+  if (change.renameTo !== undefined) {
+    existing.renameTo = change.renameTo
+  }
+  if (existing.operation !== 'rename') {
+    delete existing.renameTo
   }
 }
 
@@ -32,12 +42,16 @@ const mergeDiff = (
   diff: FileDiff,
 ): void => {
   const counts = countDiffLines(resolveFileDiffHunks(diff))
-  mergeChange(byPath, {
+  const change: AggregatedTurnFileChange = {
     path: diff.path,
     operation: diff.operation,
     additions: counts.additions,
     deletions: counts.deletions,
-  })
+  }
+  if (diff.operation === 'rename' && typeof diff.newContent === 'string') {
+    change.renameTo = diff.newContent
+  }
+  mergeChange(byPath, change)
 }
 
 const aggregateToolRunFileDiffs = (

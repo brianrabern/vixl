@@ -5,10 +5,7 @@ export type TreeNode = {
   children?: TreeNode[]
 }
 
-export const findNode = (
-  nodes: TreeNode[] | undefined,
-  path: string,
-): TreeNode | null => {
+export const findNode = (nodes: TreeNode[] | undefined, path: string): TreeNode | null => {
   if (!nodes) {
     return null
   }
@@ -24,10 +21,8 @@ export const findNode = (
   return null
 }
 
-export const findNodeKind = (
-  nodes: TreeNode[] | undefined,
-  path: string,
-): string | null => findNode(nodes, path)?.kind ?? null
+export const findNodeKind = (nodes: TreeNode[] | undefined, path: string): string | null =>
+  findNode(nodes, path)?.kind ?? null
 
 export const ancestorDirectoryPaths = (path: string): string[] => {
   if (!path || path === '.') {

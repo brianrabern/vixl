@@ -12,9 +12,9 @@ mod workspace_diagnostics;
 pub use documents::forget_open_document;
 pub use ensure_running::start_lock_for;
 pub use helpers::{
-    apply_server_disabled_flag, dependent_server_ids, is_lsp_method_not_found, normalize_lsp_method,
-    normalize_lsp_params, server_display_label, LspCatalogEntry, LspServerStatus,
-    LspWorkspaceProfile,
+    apply_server_disabled_flag, dependent_server_ids, is_lsp_method_not_found,
+    normalize_lsp_method, normalize_lsp_params, server_display_label, LspCatalogEntry,
+    LspServerStatus, LspWorkspaceProfile,
 };
 pub use io::{
     append_stderr_snippet, lsp_invalid_stream_error, lsp_request_timeout_error, read_lsp_message,

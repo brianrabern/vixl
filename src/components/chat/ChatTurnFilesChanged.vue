@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { usePersistedCollapsibleOpen } from '@/composables/use-chat-turn-open-state'
+import useChatProjectId from '@/composables/use-chat-project-id'
 import { ChevronRightIcon, Undo2Icon } from '@lucide/vue'
 import type { AggregatedTurnFileChange } from '@/types/harness/file-checkpoint'
 import {
@@ -32,6 +34,8 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn/ui/tooltip'
 import { summarizeMutationCounts } from '@/services/harness/restore-file-checkpoints'
+import openAtLine from '@/utils/open-at-line'
+import resolveRenameTarget from '@/utils/resolve-rename-target'
 
 const props = defineProps<{
   changes: AggregatedTurnFileChange[]
@@ -46,6 +50,7 @@ const emit = defineEmits<{
 }>()
 
 const { open } = usePersistedCollapsibleOpen(() => props.persistKey)
+const projectId = useChatProjectId()
 const confirmOpen = ref(false)
 
 const totals = computed(() => {
@@ -75,6 +80,33 @@ const statusFor = (
   if (operation === 'delete') return 'deleted'
   if (operation === 'rename') return 'renamed'
   return 'modified'
+}
+
+const handleOpenFile = async (
+  change: AggregatedTurnFileChange,
+  event: Event,
+): Promise<void> => {
+  event.preventDefault()
+  event.stopPropagation()
+
+  const id = projectId.value
+  if (!id) {
+    toast.error('Project not found', {
+      description: 'Could not resolve the active project for this chat.',
+    })
+    return
+  }
+
+  try {
+    const startPath =
+      change.operation === 'rename' ? (change.renameTo ?? change.path) : change.path
+    const target = resolveRenameTarget(props.changes, startPath)
+    await openAtLine(id, target)
+  } catch (error) {
+    toast.error('Failed to open file', {
+      description: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
 }
 
 const handleRestoreClick = (): void => {
@@ -139,6 +171,12 @@ const handleConfirmRestore = (): void => {
           <CommitFile
             v-for="change in changes"
             :key="change.path"
+            class="cursor-pointer"
+            role="button"
+            tabindex="0"
+            @click="handleOpenFile(change, $event)"
+            @keydown.enter="handleOpenFile(change, $event)"
+            @keydown.space.prevent="handleOpenFile(change, $event)"
           >
             <div class="flex min-w-0 flex-1 items-center gap-2">
               <CommitFileStatus :status="statusFor(change.operation)" />
