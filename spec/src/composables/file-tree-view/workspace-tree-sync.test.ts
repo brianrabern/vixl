@@ -11,29 +11,25 @@ import type { FileTreeWorkspaceSyncState } from '@/composables/file-tree-view/wo
 type TreeHandler = (event: { payload: WorkspaceTreeChanged }) => void
 
 const isTauri = vi.hoisted(() => vi.fn<() => boolean>(() => true))
-const watchWorkspace = vi.hoisted(
-  () =>
-    vi.fn<(args: { projectRoot: string; mode?: 'shallow' }) => Promise<string>>(async () => ''),
+const watchWorkspace = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; mode?: 'shallow' }) => Promise<string>>(async () => ''),
 )
-const unwatchWorkspace = vi.hoisted(
-  () => vi.fn<(args: { projectRoot: string }) => Promise<void>>(async () => undefined),
+const unwatchWorkspace = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string }) => Promise<void>>(async () => undefined),
 )
-const watchWorkspacePaths = vi.hoisted(
-  () =>
-    vi.fn<(args: { projectRoot: string; paths: string[] }) => Promise<void>>(async () => undefined),
+const watchWorkspacePaths = vi.hoisted(() =>
+  vi.fn<(args: { projectRoot: string; paths: string[] }) => Promise<void>>(async () => undefined),
 )
-const fsListDir = vi.hoisted(
-  () =>
-    vi.fn<
-      (
-        projectRoot: string,
-        path: string,
-      ) => Promise<Array<{ name: string; path: string; kind: string }>>
-    >(async () => []),
+const fsListDir = vi.hoisted(() =>
+  vi.fn<
+    (
+      projectRoot: string,
+      path: string,
+    ) => Promise<Array<{ name: string; path: string; kind: string }>>
+  >(async () => []),
 )
-const listen = vi.hoisted(
-  () =>
-    vi.fn<(event: string, handler: TreeHandler) => Promise<() => void>>(async () => () => {}),
+const listen = vi.hoisted(() =>
+  vi.fn<(event: string, handler: TreeHandler) => Promise<() => void>>(async () => () => {}),
 )
 
 vi.mock('@tauri-apps/api/event', () => mockTauriEvent({ listen }))
@@ -45,10 +41,7 @@ vi.mock('@/services/vixl/vixl-tauri', () =>
     unwatchWorkspace: (args: { projectRoot: string }) => unwatchWorkspace(args),
     watchWorkspacePaths: (args: { projectRoot: string; paths: string[] }) =>
       watchWorkspacePaths(args),
-    fsListDir: (
-      projectRoot: string,
-      path: string,
-    ) => fsListDir(projectRoot, path),
+    fsListDir: (projectRoot: string, path: string) => fsListDir(projectRoot, path),
   }),
 )
 
@@ -71,6 +64,7 @@ const sampleTree = (): TreeNode => ({
 
 let treeHandler: TreeHandler | null = null
 let wrapper: VueWrapper | null = null
+const wrappers: VueWrapper[] = []
 
 const resetDomListeners = (): void => {
   vi.spyOn(window, 'addEventListener').mockImplementation(() => undefined)
@@ -80,9 +74,8 @@ const resetDomListeners = (): void => {
 }
 
 const mountSync = async (state: FileTreeWorkspaceSyncState): Promise<void> => {
-  const { bindFileTreeWorkspaceSync } = await import(
-    '@/composables/file-tree-view/workspace-tree-sync'
-  )
+  const { bindFileTreeWorkspaceSync } =
+    await import('@/composables/file-tree-view/workspace-tree-sync')
   const Harness = defineComponent({
     setup() {
       bindFileTreeWorkspaceSync(state)
@@ -90,6 +83,7 @@ const mountSync = async (state: FileTreeWorkspaceSyncState): Promise<void> => {
     },
   })
   wrapper = mount(Harness)
+  wrappers.push(wrapper)
   await flushPromises()
 }
 
@@ -122,7 +116,9 @@ describe('bindFileTreeWorkspaceSync', () => {
   })
 
   afterEach(() => {
-    wrapper?.unmount()
+    while (wrappers.length > 0) {
+      wrappers.pop()?.unmount()
+    }
     wrapper = null
     vi.restoreAllMocks()
   })
@@ -252,5 +248,183 @@ describe('bindFileTreeWorkspaceSync', () => {
     expect(fsListDir).toHaveBeenCalledTimes(1)
     expect(fsListDir).toHaveBeenCalledWith('/Users/me', '.')
     expect(onTreeChanged).toHaveBeenCalled()
+  })
+
+  it('relists the parent directory when a harness fs mutation is published', async () => {
+    const tree = ref<TreeNode | null>(sampleTree())
+    const projectRoot = computed(() => '/Users/me')
+    const onTreeChanged = vi.fn<() => void>()
+
+    await mountSync({
+      isHome: () => false,
+      tree,
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot,
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged,
+    })
+
+    fsListDir.mockClear()
+    const { notifyWorkspaceFsMutation } =
+      await import('@/services/harness/shared/notify-fs-mutation')
+    notifyWorkspaceFsMutation('/Users/me', ['src/new.ts'])
+    await flushPromises()
+
+    expect(fsListDir).toHaveBeenCalledWith('/Users/me', 'src')
+    expect(onTreeChanged).toHaveBeenCalled()
+  })
+
+  it('relists directories from every harness mutation published in the same tick', async () => {
+    const tree = ref<TreeNode | null>({
+      name: '.',
+      path: '.',
+      kind: 'directory',
+      children: [
+        { name: 'src', path: 'src', kind: 'directory', children: [] },
+        { name: 'lib', path: 'lib', kind: 'directory', children: [] },
+      ],
+    })
+    const projectRoot = computed(() => '/Users/me')
+    const onTreeChanged = vi.fn<() => void>()
+
+    await mountSync({
+      isHome: () => false,
+      tree,
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot,
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged,
+    })
+
+    fsListDir.mockClear()
+    fsListDir.mockImplementation(async (_root, path) => {
+      if (path === '.') {
+        return [
+          { name: 'src', path: 'src', kind: 'directory' },
+          { name: 'lib', path: 'lib', kind: 'directory' },
+        ]
+      }
+      return []
+    })
+    const { notifyWorkspaceFsMutation } =
+      await import('@/services/harness/shared/notify-fs-mutation')
+    notifyWorkspaceFsMutation('/Users/me', ['src/a.ts'])
+    notifyWorkspaceFsMutation('/Users/me', ['lib/b.ts'])
+    await flushPromises()
+
+    expect(fsListDir).toHaveBeenCalledWith('/Users/me', 'src')
+    expect(fsListDir).toHaveBeenCalledWith('/Users/me', 'lib')
+    expect(onTreeChanged).toHaveBeenCalled()
+  })
+
+  it('relists the forward-slash parent when a harness path uses backslashes', async () => {
+    const tree = ref<TreeNode | null>(sampleTree())
+    const projectRoot = computed(() => '/Users/me')
+    const onTreeChanged = vi.fn<() => void>()
+
+    await mountSync({
+      isHome: () => false,
+      tree,
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot,
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged,
+    })
+
+    fsListDir.mockClear()
+    const { notifyWorkspaceFsMutation } =
+      await import('@/services/harness/shared/notify-fs-mutation')
+    notifyWorkspaceFsMutation('/Users/me', ['src\\new.ts'])
+    await flushPromises()
+
+    expect(fsListDir).toHaveBeenCalledWith('/Users/me', 'src')
+    expect(onTreeChanged).toHaveBeenCalled()
+  })
+
+  it('applies a harness mutation to the matching tree when another tree is also mounted', async () => {
+    watchWorkspace.mockImplementation(async (args) => args.projectRoot)
+    const otherChanged = vi.fn<() => void>()
+    const matchingChanged = vi.fn<() => void>()
+
+    await mountSync({
+      isHome: () => false,
+      tree: ref(sampleTree()),
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot: computed(() => '/other'),
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged: otherChanged,
+    })
+    await mountSync({
+      isHome: () => false,
+      tree: ref(sampleTree()),
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot: computed(() => '/Users/me'),
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged: matchingChanged,
+    })
+
+    fsListDir.mockClear()
+    const { notifyWorkspaceFsMutation } =
+      await import('@/services/harness/shared/notify-fs-mutation')
+    notifyWorkspaceFsMutation('/Users/me', ['src/new.ts'])
+    await flushPromises()
+
+    expect(fsListDir).toHaveBeenCalledWith('/Users/me', 'src')
+    expect(fsListDir).not.toHaveBeenCalledWith('/other', 'src')
+    expect(matchingChanged).toHaveBeenCalled()
+    expect(otherChanged).not.toHaveBeenCalled()
+  })
+
+  it('delivers the same harness mutation to every mounted matching tree', async () => {
+    const firstChanged = vi.fn<() => void>()
+    const secondChanged = vi.fn<() => void>()
+
+    await mountSync({
+      isHome: () => false,
+      tree: ref(sampleTree()),
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot: computed(() => '/Users/me'),
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged: firstChanged,
+    })
+    await mountSync({
+      isHome: () => false,
+      tree: ref(sampleTree()),
+      expandedPaths: ref(new Set(['.'])),
+      selectedPath: ref(''),
+      renamingPath: ref(null),
+      deleteTarget: ref(null),
+      projectRoot: computed(() => '/Users/me'),
+      refreshGit: vi.fn<() => Promise<void>>(async () => undefined),
+      onTreeChanged: secondChanged,
+    })
+
+    fsListDir.mockClear()
+    const { notifyWorkspaceFsMutation } =
+      await import('@/services/harness/shared/notify-fs-mutation')
+    notifyWorkspaceFsMutation('/Users/me', ['src/new.ts'])
+    await flushPromises()
+
+    expect(fsListDir.mock.calls.filter((call) => call[1] === 'src')).toHaveLength(2)
+    expect(firstChanged).toHaveBeenCalled()
+    expect(secondChanged).toHaveBeenCalled()
   })
 })

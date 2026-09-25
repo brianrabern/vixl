@@ -5,6 +5,7 @@ import { gateToolPermission } from '@/services/harness/permission/gate'
 import { fsWriteCapability } from '@/services/harness/permission/policy'
 import captureBaselinesBeforeMutate from '@/services/harness/capture-baselines-before-mutate'
 import mapDiffs from '@/services/harness/shared/map-diffs'
+import { notifyWorkspaceFsMutation } from '@/services/harness/shared/notify-fs-mutation'
 import toPermCtx from '@/services/harness/shared/to-perm-ctx'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
 
@@ -38,6 +39,7 @@ const applyPatch = (ctx: HarnessToolContext) =>
         await captureBaselinesBeforeMutate(ctx, paths, toolCallId)
       }
       await fsApplyPatch({ projectRoot: ctx.projectRoot, patch })
+      notifyWorkspaceFsMutation(ctx.projectRoot, paths)
       return { ok: true, paths, diffs }
     },
   })

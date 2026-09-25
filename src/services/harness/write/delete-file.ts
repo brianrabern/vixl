@@ -5,6 +5,7 @@ import { gateToolPermission } from '@/services/harness/permission/gate'
 import { fsDeleteCapability } from '@/services/harness/permission/policy'
 import captureBaselinesBeforeMutate from '@/services/harness/capture-baselines-before-mutate'
 import mapDiffs from '@/services/harness/shared/map-diffs'
+import { notifyWorkspaceFsMutation } from '@/services/harness/shared/notify-fs-mutation'
 import toPermCtx from '@/services/harness/shared/to-perm-ctx'
 import type { FileDiff } from '@/types/harness/file-diff'
 import type { HarnessToolContext } from '@/types/harness/tool-context'
@@ -19,9 +20,7 @@ const deleteFile = (ctx: HarnessToolContext) =>
     execute: async ({ path, recursive }, { toolCallId }) => {
       let diffs: FileDiff[]
       try {
-        diffs = mapDiffs(
-          await fsStagePreviewDelete({ projectRoot: ctx.projectRoot, path }),
-        )
+        diffs = mapDiffs(await fsStagePreviewDelete({ projectRoot: ctx.projectRoot, path }))
       } catch {
         diffs = [{ path, operation: 'delete', hunks: [] }]
       }
@@ -43,6 +42,7 @@ const deleteFile = (ctx: HarnessToolContext) =>
 
       await captureBaselinesBeforeMutate(ctx, [path], toolCallId)
       await fsDelete({ projectRoot: ctx.projectRoot, path, recursive })
+      notifyWorkspaceFsMutation(ctx.projectRoot, [path])
       return { ok: true, path, diffs }
     },
   })

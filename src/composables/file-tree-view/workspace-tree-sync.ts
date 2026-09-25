@@ -2,6 +2,10 @@ import { onMounted, onUnmounted, watch, type ComputedRef, type Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import {
+  subscribeWorkspaceFsMutations,
+  workspaceFsMutationNotice,
+} from '@/services/harness/shared/notify-fs-mutation'
+import {
   isTauri,
   unwatchWorkspace,
   watchWorkspace,
@@ -43,6 +47,7 @@ export const bindFileTreeWorkspaceSync = (state: FileTreeWorkspaceSyncState): vo
   let mergeQueue: Promise<void> = Promise.resolve()
   let homeWatchTimer: ReturnType<typeof setTimeout> | null = null
   let focusRelistTimer: ReturnType<typeof setTimeout> | null = null
+  const fsMutations = subscribeWorkspaceFsMutations()
 
   const getGeneration = (): number => mergeGeneration
 
@@ -266,6 +271,7 @@ export const bindFileTreeWorkspaceSync = (state: FileTreeWorkspaceSyncState): vo
     treeListenCancelled = true
     mergeGeneration += 1
     pendingRelist = false
+    fsMutations.dispose()
     window.removeEventListener('focus', handleWindowFocus)
     document.removeEventListener('visibilitychange', handleVisibilityChange)
     unlistenTree?.()
@@ -303,5 +309,14 @@ export const bindFileTreeWorkspaceSync = (state: FileTreeWorkspaceSyncState): vo
       return
     }
     pushHomeWatchPathsDebounced()
+  })
+
+  watch(workspaceFsMutationNotice, (notice) => {
+    if (!notice) {
+      return
+    }
+    for (const payload of fsMutations.takePending()) {
+      enqueueTreeMerge(() => applyWorkspaceTreeChanged(payload))
+    }
   })
 }

@@ -133,14 +133,19 @@ fn parent_directory(root: &Path, changed: &Path) -> Option<String> {
 fn is_structural(kind: EventKind) -> bool {
     matches!(
         kind,
-        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(ModifyKind::Name(_))
+        EventKind::Any
+            | EventKind::Create(_)
+            | EventKind::Remove(_)
+            | EventKind::Modify(ModifyKind::Any | ModifyKind::Name(_))
     )
 }
 
 fn is_created_or_renamed_to(kind: EventKind) -> bool {
     matches!(
         kind,
-        EventKind::Create(_)
+        EventKind::Any
+            | EventKind::Create(_)
+            | EventKind::Modify(ModifyKind::Any)
             | EventKind::Modify(ModifyKind::Name(
                 RenameMode::To | RenameMode::Both | RenameMode::Any
             ))
@@ -642,7 +647,7 @@ pub fn watch_workspace_paths(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use notify::event::{CreateKind, DataChange, Flag, MetadataKind, RemoveKind};
+    use notify::event::{AccessKind, CreateKind, DataChange, Flag, MetadataKind, RemoveKind};
     use std::collections::HashSet;
     use std::time::{Duration, Instant};
 
@@ -788,18 +793,37 @@ mod tests {
     }
 
     #[test]
+    fn treats_any_and_modify_any_as_structural() {
+        let any = ingest_path(EventKind::Any, "src/main.rs");
+        assert!(any.directories.contains("src"));
+        assert_eq!(any.directories.len(), 1);
+        assert_eq!(any.new_dirs, vec![join("src/main.rs")]);
+
+        let modify_any = ingest_path(EventKind::Modify(ModifyKind::Any), "src/lib.rs");
+        assert!(modify_any.directories.contains("src"));
+        assert_eq!(modify_any.directories.len(), 1);
+        assert_eq!(modify_any.new_dirs, vec![join("src/lib.rs")]);
+    }
+
+    #[test]
     fn ignores_data_and_metadata_modifies() {
         let data = ingest_path(
             EventKind::Modify(ModifyKind::Data(DataChange::Content)),
             "src/main.rs",
         );
         assert!(data.directories.is_empty());
+        assert!(data.new_dirs.is_empty());
 
         let meta = ingest_path(
             EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)),
             "src/main.rs",
         );
         assert!(meta.directories.is_empty());
+        assert!(meta.new_dirs.is_empty());
+
+        let access = ingest_path(EventKind::Access(AccessKind::Any), "src/main.rs");
+        assert!(access.directories.is_empty());
+        assert!(access.new_dirs.is_empty());
     }
 
     #[test]
