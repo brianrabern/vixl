@@ -164,7 +164,7 @@ const handleConfirmDelete = async (): Promise<void> => {
 </script>
 
 <template>
-  <SettingsSectionScroll title="Graphs">
+  <SettingsSectionScroll>
     <template #actions>
       <Tooltip>
         <TooltipTrigger as-child>

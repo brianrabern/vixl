@@ -196,7 +196,7 @@ watchThrottled(
 </script>
 
 <template>
-  <SettingsSectionScroll title="General">
+  <SettingsSectionScroll>
     <div class="space-y-6">
       <div class="flex items-center gap-1">
         <Label>Theme</Label>

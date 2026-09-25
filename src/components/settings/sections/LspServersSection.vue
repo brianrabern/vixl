@@ -36,7 +36,7 @@ const {
 </script>
 
 <template>
-  <SettingsSectionScroll title="LSP">
+  <SettingsSectionScroll>
     <template #actions>
       <Tooltip>
         <TooltipTrigger as-child>

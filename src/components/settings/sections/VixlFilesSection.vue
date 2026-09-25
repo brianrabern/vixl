@@ -230,7 +230,7 @@ watch(vixlFileChangeToken, async () => {
 </script>
 
 <template>
-  <component :is="sectionShell" :title="title">
+  <component :is="sectionShell" v-bind="collapsible ? { title } : {}">
     <template #actions>
       <Tooltip v-if="usesCreateMenu" :disable-closing-trigger="true">
         <TooltipTrigger as-child>

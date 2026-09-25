@@ -61,7 +61,7 @@ const {
 </script>
 
 <template>
-  <SettingsSectionScroll title="Providers">
+  <SettingsSectionScroll>
     <template #actions>
       <Tooltip>
         <TooltipTrigger as-child>
