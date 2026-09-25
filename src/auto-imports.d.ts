@@ -166,6 +166,7 @@ declare global {
   const useCached: typeof import('@vueuse/core').useCached
   const useChatContextActions: typeof import('./composables/use-chat-context-actions').default
   const useChatContextBudgetSync: typeof import('./composables/use-chat-context-budget-sync').default
+  const useChatProjectId: typeof import('./composables/use-chat-project-id').default
   const useChatPromptBridge: typeof import('./composables/use-chat-prompt-bridge').default
   const useChatPromptEditor: typeof import('./composables/use-chat-prompt-editor').default
   const useChatStackPills: typeof import('./composables/use-chat-stack-pills').default
@@ -564,6 +565,7 @@ declare module 'vue' {
     readonly useCached: UnwrapRef<typeof import('@vueuse/core')['useCached']>
     readonly useChatContextActions: UnwrapRef<typeof import('./composables/use-chat-context-actions')['default']>
     readonly useChatContextBudgetSync: UnwrapRef<typeof import('./composables/use-chat-context-budget-sync')['default']>
+    readonly useChatProjectId: UnwrapRef<typeof import('./composables/use-chat-project-id')['default']>
     readonly useChatPromptBridge: UnwrapRef<typeof import('./composables/use-chat-prompt-bridge')['default']>
     readonly useChatPromptEditor: UnwrapRef<typeof import('./composables/use-chat-prompt-editor')['default']>
     readonly useChatStackPills: UnwrapRef<typeof import('./composables/use-chat-stack-pills')['default']>

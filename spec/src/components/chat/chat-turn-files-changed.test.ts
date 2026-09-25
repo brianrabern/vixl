@@ -1,7 +1,36 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { toast } from 'vue-sonner'
 import ChatTurnFilesChanged from '@/components/chat/ChatTurnFilesChanged.vue'
 import type { AggregatedTurnFileChange } from '@/types/harness/file-checkpoint'
+import openAtLine from '@/utils/open-at-line'
+
+vi.mock('vue-router', () => ({
+  useRoute: () => ({
+    name: 'project-chat',
+    params: { slug: 'proj' },
+  }),
+}))
+
+vi.mock('@/composables/use-fleet-registry', () => ({
+  default: () => ({
+    projects: {
+      value: [{ id: 'proj-1', slug: 'proj' }],
+    },
+    activeProjectId: { value: 'proj-1' },
+  }),
+}))
+
+vi.mock('@/utils/open-at-line', () => ({
+  default: vi.fn<(...args: unknown[]) => Promise<void>>(),
+}))
+
+vi.mock('vue-sonner', () => ({
+  toast: {
+    error: vi.fn<(...args: unknown[]) => void>(),
+    success: vi.fn<(...args: unknown[]) => void>(),
+  },
+}))
 
 const passThrough = { template: '<div><slot /></div>' }
 
@@ -128,5 +157,164 @@ describe('ChatTurnFilesChanged restore dialog copy', () => {
   it('omits the latest-message warning when restoreDiscardsLatestMessage is false', () => {
     const mounted = mountBlock({ restoreDiscardsLatestMessage: false })
     expect(mounted.text()).not.toContain(latestMessageWarning)
+  })
+})
+
+describe('ChatTurnFilesChanged open file', () => {
+  beforeEach(() => {
+    vi.mocked(openAtLine).mockReset()
+    vi.mocked(openAtLine).mockResolvedValue(undefined)
+    vi.mocked(toast.error).mockReset()
+  })
+
+  it('opens the file at the change path when a row is clicked', async () => {
+    const mounted = mountBlock({})
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', cumulativeChanges[0]!.path)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens the rename destination when a renamed row is clicked', async () => {
+    const renamed: AggregatedTurnFileChange[] = [
+      {
+        path: 'old.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'new.ts',
+      },
+    ]
+    const mounted = mountBlock({ changes: renamed, restoreEnabled: false })
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', 'new.ts')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens the terminal destination when a rename chain is clicked', async () => {
+    const chained: AggregatedTurnFileChange[] = [
+      {
+        path: 'a.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'b.ts',
+      },
+      {
+        path: 'b.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'c.ts',
+      },
+    ]
+    const mounted = mountBlock({ changes: chained, restoreEnabled: false })
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledTimes(1)
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', 'c.ts')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens a fallback path when rename targets form a cycle', async () => {
+    const cycled: AggregatedTurnFileChange[] = [
+      {
+        path: 'a.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'b.ts',
+      },
+      {
+        path: 'b.ts',
+        operation: 'rename',
+        additions: 0,
+        deletions: 0,
+        renameTo: 'a.ts',
+      },
+    ]
+    const mounted = mountBlock({ changes: cycled, restoreEnabled: false })
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledTimes(1)
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', 'a.ts')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens the change path when a deleted row has a stale rename destination', async () => {
+    const deleted: AggregatedTurnFileChange[] = [
+      {
+        path: 'old.ts',
+        operation: 'delete',
+        additions: 0,
+        deletions: 1,
+        renameTo: 'new.ts',
+      },
+    ]
+    const mounted = mountBlock({ changes: deleted, restoreEnabled: false })
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', 'old.ts')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens the change path when a non-rename row has a stale rename destination', async () => {
+    const updated: AggregatedTurnFileChange[] = [
+      {
+        path: 'kept.ts',
+        operation: 'update',
+        additions: 1,
+        deletions: 0,
+        renameTo: 'moved.ts',
+      },
+    ]
+    const mounted = mountBlock({ changes: updated, restoreEnabled: false })
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', 'kept.ts')
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('opens the file when Enter is pressed on a focused row', async () => {
+    const mounted = mountBlock({})
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('keydown.enter')
+    await flushPromises()
+
+    expect(openAtLine).toHaveBeenCalledWith('proj-1', cumulativeChanges[0]!.path)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('toasts when openAtLine fails and does not surface an unhandled rejection', async () => {
+    vi.mocked(openAtLine).mockRejectedValueOnce(new Error('disk error'))
+    const mounted = mountBlock({})
+    const row = mounted.get('[role="button"]')
+
+    await row.trigger('click')
+    await flushPromises()
+
+    expect(toast.error).toHaveBeenCalledWith('Failed to open file', {
+      description: 'disk error',
+    })
   })
 })

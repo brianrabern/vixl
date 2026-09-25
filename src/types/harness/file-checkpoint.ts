@@ -31,4 +31,5 @@ export type AggregatedTurnFileChange = {
   operation: 'create' | 'update' | 'delete' | 'rename'
   additions: number
   deletions: number
+  renameTo?: string
 }
